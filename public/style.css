@@ -1,0 +1,248 @@
+/* Mobile-first: the whole layout is one flex column; the sidebar is an
+   off-canvas drawer on small screens and a fixed column from 768px up. */
+:root {
+  --bg: #0f1115;
+  --bg-2: #171a21;
+  --bg-3: #212632;
+  --border: #2a3140;
+  --text: #e6e9ef;
+  --text-dim: #9aa3b2;
+  --accent: #4f8cff;
+  --accent-2: #3a6fd8;
+  --danger: #e5534b;
+  --radius: 12px;
+  --sidebar-w: 300px;
+  --topbar-h: 52px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* 16px input text keeps iOS Safari from zooming on focus. */
+textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
+
+.app {
+  display: flex;
+  height: 100vh;
+  height: 100dvh; /* correct height behind mobile browser URL bars */
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  position: fixed;
+  z-index: 40;
+  top: 0; bottom: 0; left: 0;
+  width: min(85vw, 340px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+}
+.sidebar.open { transform: translateX(0); }
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; }
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Main column ---------- */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--topbar-h);
+  flex: none;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+.topbar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.topbar-title strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+.topbar-title small { color: var(--text-dim); font-size: 11px; }
+
+/* ---------- Messages ---------- */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.msg {
+  max-width: min(760px, 100%);
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.msg.user {
+  align-self: flex-end;
+  background: var(--accent-2);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--bg-3);
+  border-bottom-left-radius: 4px;
+}
+.msg.error {
+  align-self: center;
+  background: rgba(229, 83, 75, 0.15);
+  color: #ff9d97;
+}
+.msg .msg-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ---------- Composer ---------- */
+.composer {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+}
+#input {
+  flex: 1;
+  resize: none;
+  max-height: 40dvh;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  outline: none;
+  line-height: 1.4;
+}
+#input:focus { border-color: var(--accent); }
+
+/* ---------- Buttons ---------- */
+.icon-btn {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 18px;
+}
+.icon-btn:active { background: var(--bg-3); }
+
+.send-btn { background: var(--accent); color: #fff; }
+.send-btn:disabled { opacity: 0.4; cursor: default; }
+.stop-btn { background: var(--danger); }
+
+.btn {
+  min-height: 40px; /* comfortable touch targets */
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-3);
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-ghost { background: transparent; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-sm { min-height: 34px; padding: 4px 10px; }
+.btn-block { width: 100%; }
+
+.muted { color: var(--text-dim); }
+
+/* ---------- Dialog ---------- */
+.dialog {
+  width: min(480px, calc(100vw - 24px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text);
+  padding: 0;
+}
+.dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.dialog-body { padding: 18px; }
+.dialog-body h2 { margin: 0 0 12px; font-size: 18px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* ---------- Desktop ---------- */
+@media (min-width: 768px) {
+  .sidebar {
+    position: static;
+    width: var(--sidebar-w);
+    transform: none;
+  }
+  .sidebar-head { padding-top: 12px; }
+  .sidebar-foot { padding-bottom: 12px; }
+  .backdrop { display: none; }
+  #btnMenu { display: none; }
+  .messages { padding: 20px 24px; }
+  .composer { padding: 14px 24px; padding-bottom: 14px; }
+}
