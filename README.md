@@ -68,6 +68,9 @@ field greys out while the toggle is on).
   16 px inputs (no iOS zoom), touch targets ≥ 40 px.
 - Markdown rendering (XSS-safe, own mini-renderer) with copy buttons on code
   blocks, regenerate reply, per-message copy.
+- **Edit your message, re-grow the chat** — a pencil on any user message edits
+  it in place; saving drops everything after it and the model answers anew, so
+  the rest of the conversation re-grows from the corrected prompt.
 - JSON **export/import** of all chats + memories.
 - **Privacy:** the built-in proxy only accepts **localhost** LLM endpoints
   (`WC_ALLOW_LAN=1` relaxes it to private LAN ranges for when the model runs

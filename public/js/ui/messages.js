@@ -3,7 +3,7 @@
 import { state } from '../state.js';
 import { activeChat } from '../chats.js';
 import { addMemory } from '../memory.js';
-import { regenerate } from '../session.js';
+import { regenerate, editUserMessage } from '../session.js';
 import { emit } from '../events.js';
 import { $ } from './dom.js';
 import { mdToHtml } from './markdown.js';
@@ -18,6 +18,8 @@ let pinned = true;
 // Flags the scroll events our own scrollToBottom() causes, so a growing list
 // (which shifts the geometry) is never mistaken for the user scrolling away.
 let autoScroll = false;
+// The bubble whose text is currently swapped for the inline editor: { cancel() }.
+let editing = null;
 
 const nearBottom = () =>
   messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 24;
@@ -55,6 +57,9 @@ export function initMessages() {
 
 export function renderMessages() {
   const chat = activeChat();
+  // The list is about to be rebuilt, which would drop an open inline editor and
+  // its listeners without a blur — close it first so no stale state is left.
+  if (editing) editing.cancel();
   // No messages yet -> CSS floats the composer in the middle of the screen.
   mainEl.classList.toggle('empty', !chat || chat.messages.length === 0);
   messagesEl.innerHTML = '';
@@ -66,6 +71,7 @@ export function renderMessages() {
   chat.messages.forEach((m, i) => messagesEl.appendChild(renderMessage(m, {
     md: m.role === 'assistant',
     canRegenerate: i === last && canRegenerate,
+    index: i,
   })));
   scrollToBottom();
 }
@@ -82,7 +88,7 @@ function formatMsgTime(ms) {
   return `${d.toLocaleDateString([], opts)}, ${time}`;
 }
 
-export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
+export function renderMessage(m, { md = false, canRegenerate = false, index = null } = {}) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}${md ? ' md' : ''}`;
   const process = buildProcess(m); // thinking + tool pills, in chronological order
@@ -110,6 +116,16 @@ export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
       regen.setAttribute('aria-label', 'Regenerate reply');
       meta.appendChild(regen);
     }
+    // Only real, finished user messages are editable (index is null on the
+    // live-appended streaming bubble, where it would be meaningless anyway).
+    if (m.role === 'user' && index != null && !state.streaming) {
+      const edit = document.createElement('button');
+      edit.className = 'msg-action msg-edit ic ic-pencil';
+      edit.title = 'Edit & resend';
+      edit.setAttribute('aria-label', 'Edit message');
+      edit.addEventListener('click', () => startEdit(el, index));
+      meta.appendChild(edit);
+    }
     const copy = document.createElement('button');
     copy.className = 'msg-action msg-copy ic ic-copy';
     copy.title = 'Copy text';
@@ -130,6 +146,76 @@ export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
     el.appendChild(meta);
   }
   return el;
+}
+
+// Edit a user message in place (mirrors the sidebar's rename): the bubble text
+// swaps for a textarea with Save/Cancel underneath. Enter saves, Shift+Enter
+// inserts a newline, Escape cancels. Saving hands the new text to session.js,
+// which drops everything after this message and re-answers, so the rest of the
+// chat re-grows from the corrected prompt.
+function startEdit(msgEl, index) {
+  if (editing) editing.cancel(); // a second pencil moves the editor to this bubble
+  const chat = activeChat();
+  const original = chat?.messages[index];
+  if (!original || original.role !== 'user') return;
+
+  const textEl = msgEl.querySelector('.msg-text');
+  const ta = document.createElement('textarea');
+  ta.className = 'msg-edit-input';
+  ta.value = original.content;
+  ta.rows = Math.min(12, Math.max(2, ta.value.split('\n').length));
+  ta.setAttribute('aria-label', 'Message text');
+
+  const bar = document.createElement('div');
+  bar.className = 'msg-edit-actions';
+  const btn = (cls, label, fn) => {
+    const b = document.createElement('button');
+    b.className = `msg-action msg-edit-btn ic ${cls}`;
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', fn);
+    return b;
+  };
+  bar.append(
+    btn('ic-close msg-edit-cancel', 'Cancel', () => finish(false)),
+    btn('ic-check msg-edit-save', 'Save & resend', () => finish(true)),
+  );
+
+  let finished = false;
+  async function finish(commit) {
+    if (finished) return; // a button click plus a key must not commit twice
+    finished = true;
+    editing = null;
+    msgEl.classList.remove('editing');
+    ta.remove();
+    bar.remove();
+    textEl.hidden = false;
+    // An unchanged or empty text leaves the message as it was; on a real edit
+    // session.js rebuilds the whole list, so the reverted text never flashes.
+    if (commit) await editUserMessage(index, ta.value);
+  }
+
+  // Same keys as the composer: Enter sends, Shift+Enter is a newline, Esc drops it.
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  // Auto-grow like the composer: hug the text, capped at 40% of the viewport.
+  const grow = () => {
+    ta.style.height = 'auto';
+    const border = ta.offsetHeight - ta.clientHeight;
+    ta.style.height = Math.min(ta.scrollHeight + border, window.innerHeight * 0.4) + 'px';
+  }
+  ta.addEventListener('input', grow);
+
+  msgEl.classList.add('editing');
+  textEl.hidden = true;
+  msgEl.insertBefore(bar, textEl.nextSibling);
+  msgEl.insertBefore(ta, bar);
+  grow();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length); // caret at the end, text visible from the top
+  editing = { cancel: () => finish(false) };
 }
 
 function savedFactsEl(m) {

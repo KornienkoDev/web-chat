@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { loadSettings, loadChats, loadMemory, saveSettings } from './storage.js';
 import { activeChat, newChat, openChat, mostRecentChatId } from './chats.js';
 import { fetchModels, fetchMcpTools } from './llm.js';
-import { sendMessage, stopStreaming, regenerate, initSession } from './session.js';
+import { sendMessage, stopStreaming, regenerate, editUserMessage, initSession } from './session.js';
 import { addMemory, deleteMemory } from './memory.js';
 import { on } from './events.js';
 
@@ -74,7 +74,7 @@ function boot() {
   fetchMcpTools();
 
   window.__wc = {
-    state, $, activeChat, newChat, openChat, sendMessage, stopStreaming, regenerate,
+    state, $, activeChat, newChat, openChat, sendMessage, stopStreaming, regenerate, editUserMessage,
     fetchModels, addMemory, deleteMemory, renderAll, saveSettings, loadSettings,
     loadMemory, exportData, importData,
     input: $('input'),

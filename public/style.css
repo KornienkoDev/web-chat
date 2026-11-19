@@ -662,6 +662,44 @@ html.dark #btnTheme .ic-sun { display: none; }
 .msg-action:hover, .msg-action:active { opacity: 1; background: var(--hover-tint); }
 @media (hover: none) { .msg-action { opacity: 0.7; } }
 
+/* Inline edit of a user message: the textarea fills the bubble where the text
+   was, actions sit under it. Hiding the row's own buttons while editing keeps a
+   stray tap from copying or memory-saving the message being rewritten, and
+   16px font stops iOS from zooming the page when the field takes focus. */
+.msg.editing { width: 100%; }
+.msg.editing .msg-action { visibility: hidden; }
+.msg.editing .msg-edit-actions .msg-action { visibility: visible; }
+.msg-edit-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  resize: none;
+  padding: 9px 10px;
+  border: 1px solid var(--ring);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  outline: none;
+  transition: height 80ms ease-out; /* same soft growth as the composer */
+  scrollbar-width: none;
+}
+.msg-edit-input::-webkit-scrollbar { display: none; }
+.msg-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+/* The edit bar's buttons are explicit steps, not dim hover affordances. */
+.msg-edit-btn {
+  opacity: 1;
+  border: 1px solid var(--border);
+  min-width: 40px; /* comfortable tap target */
+}
+.msg-edit-save { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.msg-edit-save:hover, .msg-edit-save:active { background: var(--accent); filter: brightness(1.15); }
+
 .mem-add { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
 .mem-add textarea {
   flex: 1;

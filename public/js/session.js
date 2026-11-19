@@ -24,7 +24,13 @@ export async function sendMessage(text) {
   if (chat.title === 'New chat') chat.title = text.slice(0, 40);
   hooks.clearInput();
   hooks.renderAll();
+  await streamReply(chat);
+}
 
+// Runs one assistant turn for a chat whose user message is already in place:
+// placeholder bubble, live stream, stop/error handling. Shared by send,
+// regenerate and edited-message re-runs so all three behave identically.
+async function streamReply(chat) {
   hooks.setStreaming(true);
   state.streaming = true;
   state.controller = new AbortController();
@@ -79,7 +85,7 @@ export function stopStreaming() {
   state.controller?.abort();
 }
 
-// Re-run the last user message: drop it and everything after, then send it again.
+// Re-run the last user message: drop everything after it, then answer again.
 export async function regenerate() {
   if (state.streaming) return;
   const chat = activeChat();
@@ -87,7 +93,29 @@ export async function regenerate() {
   let i = chat.messages.length - 1;
   while (i >= 0 && chat.messages[i].role !== 'user') i--;
   if (i < 0) return;
-  const text = chat.messages[i].content;
-  chat.messages.length = i;
-  await sendMessage(text);
+  chat.messages[i].ts = Date.now(); // it is sent anew, keep the history stamps honest
+  chat.messages.length = i + 1;
+  hooks.renderAll();
+  await streamReply(chat);
+}
+
+// Edit a user message in place and re-run the model: everything after it is
+// dropped and the rest of the conversation grows from the corrected prompt
+// (the "tree" is cut and re-grown, not branched — the old path would otherwise
+// linger in the context the model sees). Returns false when nothing changed or
+// the message is gone, so the inline editor knows to just revert.
+export async function editUserMessage(index, text) {
+  if (state.streaming) return false;
+  const chat = activeChat();
+  const msg = chat?.messages[index];
+  text = (text || '').trim();
+  if (!msg || msg.role !== 'user' || !text || text === msg.content) return false;
+  // The auto-title mirrors the first message — keep it in step with the edit.
+  if (index === 0 && chat.title === msg.content.slice(0, 40)) chat.title = text.slice(0, 40);
+  msg.content = text;
+  msg.ts = Date.now(); // sent anew, like regenerate
+  chat.messages.length = index + 1;
+  hooks.renderAll();
+  await streamReply(chat);
+  return true;
 }

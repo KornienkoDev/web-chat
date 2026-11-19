@@ -320,6 +320,44 @@ const afterLen = await evalJs(`__wc.activeChat().messages.length`);
 const roles = await evalJs(`__wc.activeChat().messages.slice(-2).map(m=>m.role).join(',')`);
 check('regenerate keeps one reply', afterLen === beforeLen && roles === 'user,assistant', `${afterLen} ${roles}`);
 
+// ---------- Section: edit a user message -> re-grow the chat ----------
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('edit probe one')`, true);
+await evalJs(`__wc.sendMessage('edit probe two')`, true);
+check('pencil on user messages only', await evalJs(`(() => {
+  const users = document.querySelectorAll('.msg.user').length;
+  const pencils = document.querySelectorAll('.msg-edit').length;
+  return users === 2 && pencils === 2 && !document.querySelector('.msg.assistant .msg-edit');
+})()`));
+await evalJs(`document.querySelectorAll('.msg.user .msg-edit')[0].click(); true`);
+check('inline editor holds the message text', await evalJs(
+  `document.querySelector('.msg-edit-input')?.value === 'edit probe one'`));
+await evalJs(`document.querySelector('.msg-edit-cancel').click(); true`);
+check('cancel reverts, chat untouched', await evalJs(
+  `!document.querySelector('.msg-edit-input') && __wc.activeChat().messages[0].content === 'edit probe one'
+   && __wc.activeChat().messages.length === 4`));
+await evalJs(`document.querySelectorAll('.msg.user .msg-edit')[0].click(); true`);
+await evalJs(`document.querySelector('.msg-edit-input')
+  .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); true`);
+check('Escape closes the editor', await evalJs(`!document.querySelector('.msg-edit-input')`));
+await evalJs(`(() => {
+  document.querySelectorAll('.msg.user .msg-edit')[0].click();
+  const ta = document.querySelector('.msg-edit-input');
+  ta.value = 'edited probe one';
+  ta.dispatchEvent(new Event('input'));
+  document.querySelector('.msg-edit-save').click();
+  return true;
+})()`);
+check('edit + resend completes', await waitIdle());
+const edited = await evalJs(`__wc.activeChat().messages.map(m => m.role).join(',')`);
+check('edit cuts everything after it', await evalJs(`__wc.activeChat().messages.length`) === 2, edited);
+check('message keeps its new text after the round-trip',
+  await evalJs(`__wc.activeChat().messages[0].content`) === 'edited probe one');
+check('new reply answers the edit',
+  /edited probe one/i.test(await evalJs(`__wc.activeChat().messages[1].content`)));
+check('auto-title follows the edited first message',
+  await evalJs(`__wc.activeChat().title`) === 'edited probe one');
+
 // ---------- Section: import / export ----------
 const io = await evalJs(`(async () => {
   const data = { app: 'web_chat', version: 1,
