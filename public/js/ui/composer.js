@@ -31,9 +31,8 @@ export function clearInput() {
 
 export function setStreamingUI(on) {
   streaming = on;
-  // The same key sends or halts: swap glyph, colour and label with its role.
+  // The same key sends or halts: one class flips its glyph, colour and label.
   btnSend.classList.toggle('stop-mode', on);
-  btnSend.innerHTML = on ? '&#9632;' : '&#10148;';
   btnSend.setAttribute('aria-label', on ? 'Stop' : 'Send');
 }
 

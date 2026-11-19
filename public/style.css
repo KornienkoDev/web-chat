@@ -134,15 +134,54 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 700; }
+#btnNewChat { display: inline-flex; align-items: center; gap: 5px; }
+#btnNewChat .ic { font-size: 13px; }
 
+/* The sidebar's four actions are icon-only. Each keeps an aria-label and a
+   title, so the meaning survives the missing text, and the memory count rides
+   as a badge over its icon. The badge text is NOT in the icon font: .ic is on
+   the inner span only, so the digits still come from the UI font. */
 .sidebar-foot {
   margin-top: auto;
-  padding: 12px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
+}
+.foot-row { display: flex; gap: 2px; }
+.foot-btn {
+  position: relative;
+  flex: 1;
+  height: 38px; /* comfortable touch target */
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 24px; /* icon-only row: the glyph has to carry the whole affordance */
+}
+.foot-btn:hover { background: var(--hover-tint); color: var(--text); }
+.foot-btn:active { background: var(--bg-3); }
+/* Icon-only controls lose their text label, so the keyboard ring matters more. */
+.foot-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.foot-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--bg-3);
+  /* ring in the sidebar's own colour so the badge reads as cut out of the
+     larger glyph underneath it instead of sitting on top of it */
+  box-shadow: 0 0 0 2px var(--bg-2);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
 }
 
 .backdrop {
@@ -287,10 +326,16 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border-radius: 6px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 11.5px;
-  padding: 2px 8px;
+  width: 27px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
 }
 .code-copy:hover { color: var(--text); }
+.code-copy.copied { color: var(--fg-info); border-color: transparent; }
 
 /* ---------- Composer ---------- */
 .composer {
@@ -317,6 +362,60 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 #input:focus { border-color: var(--ring); }
 
+/* ---------- Icons ---------- */
+/* Every icon is one glyph from a 2 KB subset of the Material Design icons that
+   ship inside Symbols Nerd Font (see tools/subset-icons.sh) — with one
+   exception, the theme toggle's sun, which is the Octicon the distro website
+   uses so the two match. Drawn through ::before so the private-use codepoint
+   never lands in the DOM: the glyph is decorative by construction, and each
+   control's own aria-label stays its accessible name. The font-family is set on
+   .ic only — never on a button that also holds text or a count badge, which
+   would try to render digits from a font that has none. */
+@font-face {
+  font-family: 'wc-icons';
+  src: url('fonts/wc-icons.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block; /* the glyph is the control's only content: no fallback flash */
+}
+.ic {
+  font-family: 'wc-icons';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  text-transform: none;
+  font-feature-settings: normal;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+  speak: none;
+}
+.ic-menu::before   { content: "\f035c"; }  /* md-menu */
+.ic-moon::before   { content: "\f0594"; }  /* md-weather_night */
+.ic-sun::before    { content: "\f522"; }   /* oct-sun: the distro website's own sun */
+.ic-reload::before { content: "\f0453"; }  /* md-reload */
+.ic-copy::before   { content: "\f018f"; }  /* md-content_copy */
+.ic-check::before  { content: "\f012c"; }  /* md-check */
+.ic-close::before  { content: "\f0156"; }  /* md-close */
+.ic-pencil::before { content: "\f03eb"; }  /* md-pencil */
+.ic-plus::before   { content: "\f0415"; }  /* md-plus */
+.ic-alert::before  { content: "\f0026"; }  /* md-alert */
+.ic-brain::before  { content: "\f09d1"; }  /* md-brain */
+.ic-cog::before    { content: "\f0493"; }  /* md-cog */
+.ic-upload::before { content: "\f0552"; }  /* md-upload   tray with an arrow up */
+.ic-download::before { content: "\f01da"; }  /* md-download tray with an arrow down */
+
+/* The nerd-font merge mixes icon grids, so identical font-sizes do not give
+   identical optical sizes. Ink heights, measured from the font itself:
+   oct-sun 100% of em, moon 88%, cog 83%, brain 81%, send 75%, upload/download
+   71%, close/plus 58%, menu 50% tall but 75% wide. The nudges below bring each
+   outlier in line with the icons it sits next to. Each rule is written .ic.ic-*
+   (two classes) on purpose: these land on the same element as a component rule
+   that also sets font-size (e.g. .chat-item-btn), and would lose to it on order. */
+.ic.ic-sun { font-size: 0.88em; }              /* it fills the whole em, unlike md-* */
+.ic.ic-upload, .ic.ic-download { font-size: 1.17em; }  /* narrow tray glyphs sit small */
+.ic.ic-close, .ic.ic-plus { font-size: 1.27em; }       /* the small ✕/+ grid, so they
+                                                          match the pencil beside them */
+
 /* ---------- Buttons ---------- */
 .icon-btn {
   flex: none;
@@ -328,20 +427,24 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border: none;
   border-radius: 10px;
   background: transparent;
-  font-size: 18px;
+  font-size: 24px; /* md-menu is only half as tall as it is wide: needs the room */
 }
 .icon-btn:active { background: var(--bg-3); }
-.icon-btn svg { width: 19px; height: 19px; }
 
-/* Theme toggle: offer the mode you are not in (moon on light, sun on dark). */
-#btnTheme .i-sun { display: none; }
-html.dark #btnTheme .i-sun { display: block; }
-html.dark #btnTheme .i-moon { display: none; }
+/* Theme toggle: show the scheme you are in — sun in light, moon in dark, the
+   same mapping the distro website uses. The button's aria-label keeps naming
+   the action ("Switch to dark theme"), so state and action stay distinct. */
+#btnTheme .ic-moon { display: none; }
+html.dark #btnTheme .ic-moon { display: block; }
+html.dark #btnTheme .ic-sun { display: none; }
 
+/* The send key doubles as stop, so its glyph changes with its role. */
 .send-btn { background: var(--accent); color: var(--accent-fg); }
+.send-btn::before { content: "\f048a"; }             /* md-send */
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 /* the send key's stop role while a reply streams */
 .send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
+.send-btn.stop-mode::before { content: "\f04db"; }   /* md-stop */
 
 .btn {
   min-height: 40px; /* comfortable touch targets */
@@ -366,12 +469,15 @@ html.dark #btnTheme .i-moon { display: none; }
   background: var(--surface-info);
   color: var(--fg-info);
   font-size: 12.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .msg-action {
   border: none;
   background: transparent;
   opacity: 0.45;
-  font-size: 14px;
+  font-size: 16px;
   padding: 4px 8px;
   border-radius: 8px;
 }
@@ -433,9 +539,6 @@ html.dark #btnTheme .i-moon { display: none; }
 .mem-tag.src-tool { color: var(--fg-info); background: var(--surface-info); }
 
 .btn-danger-ghost { color: var(--danger); border-color: transparent; background: transparent; margin-right: auto; }
-
-.io-row { display: flex; gap: 8px; }
-.io-row .btn { flex: 1; }
 
 /* ---------- Toast ---------- */
 .toast {
@@ -502,6 +605,7 @@ html.dark #btnTheme .i-moon { display: none; }
   background: transparent;
   color: var(--text-dim);
   visibility: hidden;
+  font-size: 17px;
 }
 .chat-item:hover .chat-item-btn, .chat-item.active .chat-item-btn { visibility: visible; }
 /* Touch devices have no hover: keep the controls visible. */

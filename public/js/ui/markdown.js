@@ -47,7 +47,7 @@ export function mdToHtml(src) {
   return out.join('').replace(/\u0000B(\d+)\u0000/g, (_, i) => {
     const { lang, code } = blocks[Number(i)];
     return `<pre><div class="code-head"><span>${esc(lang || 'code')}</span>`
-      + `<button class="code-copy" type="button">copy</button></div>`
+      + `<button class="code-copy ic ic-copy" type="button" aria-label="Copy code" title="Copy code"></button></div>`
       + `<code>${esc(code)}</code></pre>`;
   });
 }

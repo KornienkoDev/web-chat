@@ -99,9 +99,9 @@ function renderMemory() {
     tag.className = `mem-tag src-${m.source}`;
     tag.textContent = tags[m.source] || m.source;
     const del = document.createElement('button');
-    del.className = 'chat-item-btn chat-item-del';
-    del.textContent = '\u2715';
+    del.className = 'chat-item-btn chat-item-del ic ic-close';
     del.title = 'Forget';
+    del.setAttribute('aria-label', 'Forget this memory');
     del.addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: 'Forget this memory?',

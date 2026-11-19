@@ -37,8 +37,12 @@ export function initMessages() {
       const code = copy.closest('pre')?.querySelector('code');
       if (code) {
         navigator.clipboard.writeText(code.innerText);
-        copy.textContent = 'copied';
-        setTimeout(() => { copy.textContent = 'copy'; }, 1500);
+        copy.classList.replace('ic-copy', 'ic-check');
+        copy.classList.add('copied');
+        setTimeout(() => {
+          copy.classList.replace('ic-check', 'ic-copy');
+          copy.classList.remove('copied');
+        }, 1500);
       }
       return;
     }
@@ -75,24 +79,24 @@ export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
     meta.className = 'msg-meta';
     if (canRegenerate) {
       const regen = document.createElement('button');
-      regen.className = 'msg-action msg-regen';
-      regen.textContent = '\u21BB'; // ↻
+      regen.className = 'msg-action msg-regen ic ic-reload';
       regen.title = 'Regenerate reply';
+      regen.setAttribute('aria-label', 'Regenerate reply');
       meta.appendChild(regen);
     }
     const copy = document.createElement('button');
-    copy.className = 'msg-action msg-copy';
-    copy.textContent = '\u2398'; // ⎘
+    copy.className = 'msg-action msg-copy ic ic-copy';
     copy.title = 'Copy text';
+    copy.setAttribute('aria-label', 'Copy reply text');
     copy.addEventListener('click', () => {
       navigator.clipboard.writeText(m.content);
       emit('toast', 'Copied');
     });
     meta.appendChild(copy);
     const btn = document.createElement('button');
-    btn.className = 'msg-action';
-    btn.textContent = '🧠';
+    btn.className = 'msg-action ic ic-brain';
     btn.title = 'Save this message to memory';
+    btn.setAttribute('aria-label', 'Save this message to memory');
     btn.addEventListener('click', () => {
       emit('toast', addMemory(m.content, 'manual') ? 'Saved to memory' : 'Already in memory');
     });
@@ -105,7 +109,11 @@ export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
 function savedFactsEl(m) {
   const note = document.createElement('div');
   note.className = 'msg-saved';
-  note.textContent = '🧠 remembered: ' + m.savedFacts.join('  ·  ');
+  // The icon is a styled span; the facts themselves stay a single text node.
+  const icon = document.createElement('span');
+  icon.className = 'ic ic-brain';
+  icon.setAttribute('aria-hidden', 'true');
+  note.append(icon, 'Remembered: ' + m.savedFacts.join('  ·  '));
   return note;
 }
 

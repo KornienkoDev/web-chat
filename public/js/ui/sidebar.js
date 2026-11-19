@@ -71,18 +71,18 @@ export function renderChatList() {
     main.addEventListener('click', () => { openChat(c.id); closeSidebar(); });
 
     const btnRename = document.createElement('button');
-    btnRename.className = 'chat-item-btn';
-    btnRename.textContent = '\u270E'; // pencil
+    btnRename.className = 'chat-item-btn ic ic-pencil';
     btnRename.title = 'Rename';
+    btnRename.setAttribute('aria-label', `Rename “${c.title || 'Untitled'}”`);
     btnRename.addEventListener('click', (e) => {
       e.stopPropagation();
       startRename(item, c);
     });
 
     const btnDel = document.createElement('button');
-    btnDel.className = 'chat-item-btn chat-item-del';
-    btnDel.textContent = '\u2715'; // cross
+    btnDel.className = 'chat-item-btn chat-item-del ic ic-close';
     btnDel.title = 'Delete';
+    btnDel.setAttribute('aria-label', `Delete “${c.title || 'Untitled'}”`);
     btnDel.addEventListener('click', async (e) => {
       e.stopPropagation();
       const ok = await confirmDialog({
@@ -146,5 +146,8 @@ function startRename(item, chat) {
 }
 
 export function renderMemCount() {
-  $('memCount').textContent = state.memory.length ? `(${state.memory.length})` : '';
+  const n = state.memory.length;
+  const badge = $('memCount');
+  badge.textContent = n > 99 ? '99+' : String(n);
+  badge.hidden = !n; // the button is icon-only now, so the count rides on top of it
 }

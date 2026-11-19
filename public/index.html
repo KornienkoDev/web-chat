@@ -28,32 +28,41 @@
     <aside id="sidebar" class="sidebar" aria-label="Chats">
       <div class="sidebar-head">
         <span class="brand">Local Chat</span>
-        <button id="btnNewChat" class="btn btn-primary btn-sm" title="New chat">+ New</button>
+        <button id="btnNewChat" class="btn btn-primary btn-sm" title="New chat"><span class="ic ic-plus" aria-hidden="true"></span>New</button>
       </div>
       <input id="chatSearch" class="chat-search" type="search" placeholder="Search chats" autocomplete="off">
       <nav id="chatList" class="chat-list" aria-label="Chat history"></nav>
       <div class="sidebar-foot">
-        <button id="btnMemory" class="btn btn-ghost btn-block">Memory <span id="memCount"></span></button>
-        <button id="btnSettings" class="btn btn-ghost btn-block">Settings</button>
-        <div class="io-row">
-          <button id="btnExport" class="btn btn-ghost btn-sm">Export</button>
-          <button id="btnImport" class="btn btn-ghost btn-sm">Import</button>
-          <input id="importFile" type="file" accept="application/json,.json" hidden>
+        <div class="foot-row">
+          <button id="btnMemory" class="foot-btn" aria-label="Long-term memory" title="Memory">
+            <span class="ic ic-brain" aria-hidden="true"></span>
+            <span id="memCount" class="foot-badge" hidden></span>
+          </button>
+          <button id="btnSettings" class="foot-btn" aria-label="Settings" title="Settings">
+            <span class="ic ic-cog" aria-hidden="true"></span>
+          </button>
+          <button id="btnExport" class="foot-btn" aria-label="Export chats and memories" title="Export">
+            <span class="ic ic-upload" aria-hidden="true"></span>
+          </button>
+          <button id="btnImport" class="foot-btn" aria-label="Import from a backup file" title="Import">
+            <span class="ic ic-download" aria-hidden="true"></span>
+          </button>
         </div>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
       </div>
     </aside>
     <div id="backdrop" class="backdrop" hidden></div>
 
     <main class="main">
       <header class="topbar">
-        <button id="btnMenu" class="icon-btn" aria-label="Open chats">&#9776;</button>
+        <button id="btnMenu" class="icon-btn ic ic-menu" aria-label="Open chats"></button>
         <div class="topbar-title">
           <strong id="chatTitle">New chat</strong>
           <small id="modelLabel"></small>
         </div>
         <button id="btnTheme" class="icon-btn" aria-label="Switch theme" title="Switch theme">
-          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <span class="ic ic-moon" aria-hidden="true"></span>
+          <span class="ic ic-sun" aria-hidden="true"></span>
         </button>
       </header>
 
@@ -62,7 +71,7 @@
 
       <footer class="composer">
         <textarea id="input" rows="1" placeholder="Message…" autocomplete="off"></textarea>
-        <button id="btnSend" class="icon-btn send-btn" aria-label="Send">&#10148;</button>
+        <button id="btnSend" class="icon-btn send-btn ic" aria-label="Send"></button>
       </footer>
     </main>
   </div>

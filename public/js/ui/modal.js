@@ -21,7 +21,7 @@ function build() {
   dialogEl.innerHTML = `
     <div class="modal-body">
       <div class="modal-head">
-        <span class="modal-icon" aria-hidden="true">\u26A0</span>
+        <span class="modal-icon ic ic-alert" aria-hidden="true"></span>
         <h2 id="modalTitle" class="modal-title"></h2>
       </div>
       <p id="modalText" class="modal-text"></p>
