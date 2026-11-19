@@ -117,6 +117,24 @@ await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
 check('unchecking mock restores the URL field', mockOff);
 await evalJs(`Object.assign(__wc.state.settings, { model: '' }); __wc.saveSettings();`);
 
+// ---------- Section: settings fits a phone viewport ----------
+// The two-column field rows must shrink below the number inputs' intrinsic
+// width; otherwise the right-hand input spills out of the card on a 375px
+// screen and the dialog scrolls sideways.
+await must('Emulation.setDeviceMetricsOverride', { width: 375, height: 667, deviceScaleFactor: 1, mobile: true }, sessionId);
+await evalJs(`document.getElementById('btnSettings').click()`);
+const fit = await evalJs(`(() => {
+  const body = document.querySelector('#settingsDialog .dialog-body');
+  return {
+    spill: body.scrollWidth - body.clientWidth,
+    maxTokRight: Math.round(document.getElementById('setMaxTokens').getBoundingClientRect().right),
+    cardRight: Math.round(document.getElementById('settingsDialog').getBoundingClientRect().right),
+  };
+})()`);
+check('settings fields fit a 375px viewport', fit.spill <= 0 && fit.maxTokRight <= fit.cardRight + 1, JSON.stringify(fit));
+await evalJs(`document.getElementById('settingsDialog').close()`);
+await must('Emulation.clearDeviceMetricsOverride', {}, sessionId);
+
 // ---------- Section: real LLM round-trip + memory tool ----------
 await evalJs(`__wc.sendMessage('A few things to note: my name is Marcin, I am vegetarian, and my dog Pixel is 3 years old.')`, true);
 const lastMsg = await evalJs(`__wc.activeChat().messages.at(-1)`);

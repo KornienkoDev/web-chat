@@ -1114,6 +1114,7 @@ html.dark #btnTheme .ic-sun { display: none; }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); }
 .field > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .field input, .field select, .field textarea {
+  width: 100%;                   /* otherwise inputs keep their UA ~20-char width */
   padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1124,6 +1125,10 @@ html.dark #btnTheme .ic-sun { display: none; }
 .field input:disabled { opacity: 0.5; cursor: not-allowed; }
 .field textarea { font-size: 14px; resize: vertical; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Grid items may not shrink below their content by default (min-width:auto),
+   which let the number inputs push the row past the dialog edge on phones —
+   the right-hand "Max tokens" field spilled out of the card. */
+.field-row > .field { min-width: 0; }
 /* Checkbox row in the settings dialog (mock toggle), styled like .mem-toggle. */
 .field-check { flex-direction: row; align-items: center; }
 .field-check input { width: 17px; height: 17px; accent-color: var(--accent); }
