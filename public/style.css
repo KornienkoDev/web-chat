@@ -720,6 +720,9 @@ html.dark #btnTheme .ic-sun { display: none; }
   margin-bottom: 10px;
 }
 .mem-toggle input { width: 17px; height: 17px; accent-color: var(--accent); }
+/* Both lines echo the absolute memory-file path; a long path is one
+   unbreakable token and would widen the dialog instead of wrapping. */
+#memFile, #memStatus { overflow-wrap: anywhere; }
 .mem-list {
   max-height: 40dvh;
   overflow-y: auto;
