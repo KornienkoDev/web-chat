@@ -40,8 +40,12 @@ export function setStreamingUI(on) {
   btnSend.setAttribute('aria-label', on ? 'Stop' : 'Send');
 }
 
-// Auto-grow textarea with the typed text.
+// Auto-grow textarea with the typed text. scrollHeight leaves out the border,
+// and the box is border-box, so the border widths must be added back — otherwise
+// every height lands 2px short and the field scrolls (a phantom overflow) when
+// it should just fit.
 function autoGrow() {
   input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + 'px';
+  const border = input.offsetHeight - input.clientHeight;
+  input.style.height = Math.min(input.scrollHeight + border, window.innerHeight * 0.4) + 'px';
 }

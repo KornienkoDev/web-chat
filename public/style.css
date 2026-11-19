@@ -197,6 +197,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative; /* anchor for the centred empty-state composer */
 }
 
 .topbar {
@@ -341,25 +342,51 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .composer {
   flex: none;
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
   padding: 10px var(--chat-gutter);
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--bg-2);
 }
-#input {
+/* ChatGPT-style single box: the send key rides inside the field's right edge
+   instead of sitting in a control column beside it. */
+.composer-box {
+  position: relative; /* anchor for the send key */
   flex: 1;
+  min-width: 0;
+}
+
+/* Empty chat, ChatGPT-style: the composer floats in the vertical middle of the
+   screen instead of docking to the bottom edge. translateY(-50%) is relative
+   to the element's own height, so the box expands around its centre while the
+   textarea grows. renderMessages() toggles .empty on .main. */
+.main.empty .composer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: none;
+  background: transparent;
+  padding-bottom: 10px; /* no safe-area inset: it is not near the bottom edge */
+}
+
+#input {
+  width: 100%;
   resize: none;
   max-height: 40dvh;
   min-height: 42px;
-  padding: 10px 12px;
+  padding: 10px 46px 10px 12px; /* the right gutter is the send key's home */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   outline: none;
   line-height: 1.4;
+  transition: height 80ms ease-out; /* autoGrow's height jumps read as smooth growth */
+  /* The field grows instead of scrolling; past its cap, wheel/touch still
+     scroll the text, just without a scrollbar stealing width and attention. */
+  scrollbar-width: none;
 }
+#input::-webkit-scrollbar { display: none; }
 #input:focus { border-color: var(--ring); }
 
 /* ---------- Icons ---------- */
@@ -438,8 +465,21 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 html.dark #btnTheme .ic-moon { display: block; }
 html.dark #btnTheme .ic-sun { display: none; }
 
-/* The send key doubles as stop, so its glyph changes with its role. */
-.send-btn { background: var(--accent); color: var(--accent-fg); }
+/* The send key doubles as stop, so its glyph changes with its role. It floats
+   inside the textarea's bottom-right corner: on one line it sits centred
+   (6px margin all round), on many it stays anchored to the bottom, like
+   ChatGPT's. 30px keeps it clear of the 12px text gutter. */
+.send-btn {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 18px;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
 .send-btn::before { content: "\f048a"; }             /* md-send */
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 /* the send key's stop role while a reply streams */

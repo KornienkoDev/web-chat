@@ -104,7 +104,44 @@ check('memory restored after reload', (await evalJs(`__wc.state.memory.length`))
 
 // Second chat + open older + delete.
 await evalJs(`__wc.newChat()`);
+// Empty new chat: ChatGPT-style centred composer that grows around its middle.
+const centred = await evalJs(`(() => {
+  const main = document.querySelector('.main');
+  const r = main.getBoundingClientRect();
+  const box = document.querySelector('.composer').getBoundingClientRect();
+  const mid = (box.top + box.bottom) / 2;
+  const h0 = __wc.input.style.height || __wc.input.getBoundingClientRect().height;
+  __wc.input.value = 'a\\nb\\nc\\nd\\ne';
+  __wc.input.dispatchEvent(new Event('input'));
+  const h1 = parseFloat(__wc.input.style.height);
+  __wc.input.value = '';
+  __wc.input.dispatchEvent(new Event('input'));
+  return { empty: main.classList.contains('empty'),
+           offCentre: +(Math.abs(mid - (r.top + r.bottom) / 2)).toFixed(1),
+           grew: h1 > parseFloat(h0) };
+})()`);
+check('empty chat: composer centred and grows', centred.empty && centred.offCentre < 4 && centred.grew, JSON.stringify(centred));
 await evalJs(`__wc.sendMessage('second chat probe')`, true);
+check('first message docks composer to bottom', await evalJs(`(() => {
+  const main = document.querySelector('.main');
+  const box = document.querySelector('.composer').getBoundingClientRect();
+  return !main.classList.contains('empty') && Math.abs(box.bottom - innerHeight) < 2;
+})()`));
+// No control column beside the field: the send key sits inside it, and the
+// textarea shows no scrollbar (its height fits the text exactly).
+const field = await evalJs(`(async () => {
+  const i = document.querySelector('#input');
+  const r = i.getBoundingClientRect();
+  const b = document.querySelector('#btnSend').getBoundingClientRect();
+  i.value = Array(6).fill('a line').join('\\n');
+  i.dispatchEvent(new Event('input'));
+  await new Promise((res) => setTimeout(res, 250)); // let the height transition settle
+  const fits = i.scrollHeight <= i.clientHeight + 1;
+  i.value = ''; i.dispatchEvent(new Event('input'));
+  return { inside: b.left > r.left && b.right <= r.right && b.bottom <= r.bottom,
+           noBar: getComputedStyle(i).scrollbarWidth === 'none', fits };
+})()`, true);
+check('send key inside the field, scrollbar gone', field.inside && field.noBar && field.fits, JSON.stringify(field));
 await reload();
 check('two chats persisted', await evalJs(`__wc.state.chats.size`) === 2);
 const olderId = await evalJs(`[...__wc.state.chats.values()].sort((a,b)=>a.updatedAt-b.updatedAt)[0].id`);

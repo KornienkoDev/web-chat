@@ -9,6 +9,7 @@ import { $ } from './dom.js';
 import { mdToHtml } from './markdown.js';
 
 let messagesEl;
+let mainEl; // the .main column; gets .empty so CSS can centre the composer
 // Whether the list keeps following a streaming reply. Turns off the moment the
 // user scrolls up and back on when they return to the bottom, so a reply can't
 // hijack the scrollbar mid-stream.
@@ -22,6 +23,7 @@ const nearBottom = () =>
 
 export function initMessages() {
   messagesEl = $('messages');
+  mainEl = messagesEl.closest('.main');
   // Upward wheel releases the pin instantly (a wheel can land between stream
   // chunks, before a scroll event would); touch and scrollbar drags are judged
   // by the scroll handler, which ignores our own programmatic jumps.
@@ -52,6 +54,8 @@ export function initMessages() {
 
 export function renderMessages() {
   const chat = activeChat();
+  // No messages yet -> CSS floats the composer in the middle of the screen.
+  mainEl.classList.toggle('empty', !chat || chat.messages.length === 0);
   messagesEl.innerHTML = '';
   if (!chat) return;
   const last = chat.messages.length - 1;
