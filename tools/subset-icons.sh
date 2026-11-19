@@ -2,7 +2,7 @@
 # Rebuild the icon font subset: public/fonts/wc-icons.woff2
 #
 # The app draws every icon from one Material Design glyph set that ships inside
-# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 18 below are used, so the
+# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 20 below are used, so the
 # subset gets them in 3 KB instead. Keep this list in sync with the .ic-* rules
 # in style.css — a missing codepoint renders as a blank box, silently. The one
 # exception is the disclosure chevron: it styles the <summary>'s ::before
@@ -19,6 +19,7 @@ OUT="public/fonts/wc-icons.woff2"
 # U+  name                 used by
 CODEPOINTS=(
   U+F0026   # md-alert          confirm dialog warning glyph
+  U+F0066   # md-attachment     composer attach-files button
   U+F012C   # md-check          "copied" feedback
   U+F0142   # md-chevron_right  thinking-block disclosure (replaces the native triangle)
   U+F0156   # md-close          delete chat, forget memory, clear
@@ -36,6 +37,7 @@ CODEPOINTS=(
   U+F522    # oct-sun           theme toggle, dark side (the glyph the distro website uses)
   U+F09D1   # md-brain          memory: sidebar, save-to-memory, remembered badge
   U+F05B7   # md-wrench         MCP tool-usage badge (model used an MCP tool)
+  U+F09EE   # md-file_document_outline  document attachment chips
 )
 ICONS=$(IFS=, ; echo "${CODEPOINTS[*]}")
 
