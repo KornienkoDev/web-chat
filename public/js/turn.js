@@ -5,6 +5,7 @@ import { state } from './state.js';
 import { saveChats } from './storage.js';
 import { streamCompletion, callMcpTool } from './llm.js';
 import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE, FORGET_TOOL, forgetMemory } from './memory.js';
+import { documentPartText } from './attachments.js';
 
 // Per-message clock for the model: each history message gets its send time and
 // the gap since the previous one, and the system prompt states the current
@@ -38,11 +39,30 @@ function stampHistory(msgs) {
     // Upstream APIs may reject unknown fields like ts and reasoning (thinking,
     // saved facts and the tool-usage timeline are display-only history; models
     // do not expect their own past reasoning or tool-use notes echoed back).
-    const { ts, reasoning, savedFacts, mcpUsed, timeline, ...clean } = m;
-    if (!ts) { prev = null; return clean; }
-    const tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
-    prev = ts;
-    return { ...clean, content: `[${tag}] ${clean.content}` };
+    const { ts, reasoning, savedFacts, mcpUsed, timeline, attachments, ...clean } = m;
+    let tag = '';
+    if (ts) {
+      tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
+      prev = ts;
+    } else {
+      prev = null;
+    }
+    if (!attachments?.length) {
+      return tag ? { ...clean, content: `[${tag}] ${clean.content}` } : clean;
+    }
+    // A user message with attachments: the caption and any text documents
+    // travel as one text part (so even non-vision upstreams get every word),
+    // images as OpenAI `image_url` parts carrying their base64 data URL.
+    let text = (tag ? `[${tag}] ` : '') + (clean.content || '');
+    for (const a of attachments) {
+      if (a.kind === 'text') text += (text.trim() ? '\n\n' : '') + documentPartText(a);
+    }
+    const images = attachments.filter((a) => a.kind === 'image' && a.dataUrl);
+    if (!images.length) return { ...clean, content: text };
+    const parts = [];
+    if (text.trim()) parts.push({ type: 'text', text });
+    for (const a of images) parts.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+    return { ...clean, content: parts };
   });
 }
 

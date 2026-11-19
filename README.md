@@ -64,6 +64,13 @@ field greys out while the toggle is on).
   blob. Pills carry a query preview, shimmer while a call runs, turn red if it
   fails, and stay with the message (the timeline is stripped from the history
   sent back to the model).
+- **Attachments: images + text documents** — a paperclip (or paste, or drag &
+  drop) stages up to 6 files as removable chips above the composer. Images are
+  downscaled to ≤1280 px JPEG **in the browser** (never a server) and sent to
+  vision-capable models as OpenAI `image_url` parts; `.txt`/`.md`/code files are
+  read as text and inlined into the prompt, so even non-vision models can read
+  them. Thumbnails and expandable document previews stay in the message bubble,
+  and attachments persist in `localStorage` with the chats.
 - **Mobile-first responsive UI** — drawer sidebar on phones, safe-area aware,
   16 px inputs (no iOS zoom), touch targets ≥ 40 px.
 - Markdown rendering (XSS-safe, own mini-renderer) with copy buttons on code
@@ -97,6 +104,7 @@ public/
     llm.js             transport: /api/chat streaming, /api/models + /api/mcp
                        discovery, MCP tool calls
     memory.js          memory domain: dedup, save_memory tool, extractors
+    attachments.js     file -> message-record ingestion (canvas downscale, text caps)
     turn.js            one user turn: prompt assembly + agentic tool loop
     session.js         send-flow service (stream, stop, errors) — UI hooks injected
     io.js              export/import backups

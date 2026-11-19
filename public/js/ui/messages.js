@@ -93,6 +93,7 @@ export function renderMessage(m, { md = false, canRegenerate = false, index = nu
   el.className = `msg ${m.role}${md ? ' md' : ''}`;
   const process = buildProcess(m); // thinking + tool pills, in chronological order
   if (process) el.appendChild(process);
+  if (m.attachments?.length) el.appendChild(attachmentsEl(m));
   const textEl = document.createElement('div');
   textEl.className = 'msg-text';
   if (md) textEl.innerHTML = mdToHtml(m.content);
@@ -226,6 +227,44 @@ function startEdit(msgEl, index) {
   ta.focus();
   ta.setSelectionRange(ta.value.length, ta.value.length); // caret at the end, text visible from the top
   editing = { cancel: () => finish(false) };
+}
+
+// Files a user message carries: images render as click-free thumbnails (the
+// data URL came from our own FileReader), documents as one-line chips that
+// expand to the text. Everything lands via textContent/img.src — model output
+// never reaches this path, and neither do file names.
+function attachmentsEl(m) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-attach';
+  for (const a of m.attachments) {
+    if (a.kind === 'image' && a.dataUrl) {
+      const img = document.createElement('img');
+      img.className = 'attach-img';
+      img.src = a.dataUrl;
+      img.alt = a.name;
+      img.title = a.name;
+      img.loading = 'lazy';
+      wrap.appendChild(img);
+    } else {
+      const det = document.createElement('details');
+      det.className = 'attach-doc';
+      const sum = document.createElement('summary');
+      const icon = document.createElement('span');
+      icon.className = 'ic ic-file-doc';
+      icon.setAttribute('aria-hidden', 'true');
+      const name = document.createElement('span');
+      name.className = 'attach-doc-name';
+      name.textContent = a.name;
+      sum.append(icon, name);
+      det.appendChild(sum);
+      const pre = document.createElement('pre');
+      pre.className = 'attach-doc-text';
+      pre.textContent = a.text || '';
+      det.appendChild(pre);
+      wrap.appendChild(det);
+    }
+  }
+  return wrap;
 }
 
 function savedFactsEl(m) {

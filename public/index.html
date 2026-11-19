@@ -70,10 +70,14 @@
       <div id="messages" class="messages" role="log" aria-live="polite"></div>
 
       <footer class="composer">
+        <div id="attachBar" class="attach-bar" hidden></div>
         <div class="composer-box">
           <textarea id="input" rows="1" placeholder="Message…" autocomplete="off"></textarea>
+          <button id="btnAttach" class="icon-btn attach-btn ic ic-attach" aria-label="Attach files" title="Attach files"></button>
           <button id="btnSend" class="icon-btn send-btn ic" aria-label="Send"></button>
         </div>
+        <input id="attachFile" type="file" multiple hidden
+          accept="image/*,.txt,.md,.markdown,.json,.jsonl,.csv,.tsv,.log,.yaml,.yml,.xml,.toml,.ini,.conf,.html,.css,.js,.mjs,.ts,.tsx,.jsx,.py,.rb,.go,.rs,.java,.c,.h,.cpp,.cs,.php,.sql,.sh,.bash,.patch,.svg">
       </footer>
     </main>
   </div>

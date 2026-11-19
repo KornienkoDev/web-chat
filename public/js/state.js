@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const state = {
-  chats: new Map(), // id -> { id, title, createdAt, updatedAt, messages: [{role, content, ts?, savedFacts?, reasoning?, timeline?}] }
+  chats: new Map(), // id -> { id, title, createdAt, updatedAt, messages: [{role, content, ts?, attachments?, savedFacts?, reasoning?, timeline?}] }
   activeId: null,
   streaming: false,
   search: '',

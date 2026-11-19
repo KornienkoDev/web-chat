@@ -280,6 +280,56 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   font-variant-numeric: tabular-nums;
 }
 
+/* Files a user message carries: images as thumbnails, documents as chips that
+   expand to their text (a <details>, so keyboard and mobile work for free). */
+.msg-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.msg.user .msg-attach { justify-content: flex-end; }
+.attach-img {
+  display: block;
+  max-width: min(280px, 100%);
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.attach-doc {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.attach-doc > summary {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  min-height: 20px; /* comfortable tap target */
+  list-style: none;
+}
+.attach-doc > summary::-webkit-details-marker { display: none; }
+.attach-doc-name { font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.attach-doc-text {
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px; /* long documents scroll instead of eating the chat */
+  overflow-y: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Collapsible model reasoning, above the reply text inside the bubble. */
 .msg-think {
   margin: 0 0 8px;
@@ -421,6 +471,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .composer {
   flex: none;
   display: flex;
+  flex-direction: column; /* attachment chips ride above the field */
+  gap: 8px;
   padding: 10px var(--chat-gutter);
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
@@ -430,7 +482,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
    instead of sitting in a control column beside it. */
 .composer-box {
   position: relative; /* anchor for the send key */
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
@@ -454,7 +506,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   resize: none;
   max-height: 40dvh;
   min-height: 42px;
-  padding: 10px 46px 10px 12px; /* the right gutter is the send key's home */
+  padding: 10px 46px; /* both gutters belong to floating keys: clip (left), send (right) */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -467,6 +519,74 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 #input::-webkit-scrollbar { display: none; }
 #input:focus { border-color: var(--ring); }
+
+/* The paperclip mirrors the send key inside the field's left edge. */
+.attach-btn {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 18px;
+  color: var(--text-dim);
+}
+.attach-btn:hover, .attach-btn:active { color: var(--text); background: var(--hover-tint); }
+
+/* Staged files, chips above the field: image chips get a thumbnail, document
+   chips an icon; the ✕ puts the file back where it came from. */
+.attach-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 230px;
+  padding: 3px 4px 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.attach-chip .ic { flex: none; margin: 0 2px; }
+.attach-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: none;
+}
+.attach-chip-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attach-x {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.attach-x:hover, .attach-x:active { color: var(--danger); background: var(--hover-tint); }
+/* Files dragged over the chat: borrow the focus ring so the field itself says
+   "drop here". */
+.composer.dragging #input { border-color: var(--ring); }
 
 /* ---------- Icons ---------- */
 /* Every icon is one glyph from a 2 KB subset of the Material Design icons that
@@ -510,6 +630,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .ic-upload::before { content: "\f0552"; }  /* md-upload   tray with an arrow up */
 .ic-download::before { content: "\f01da"; }  /* md-download tray with an arrow down */
 .ic-wrench::before { content: "\f05b7"; }  /* md-wrench   MCP tool-usage badge */
+.ic-attach::before { content: "\f0066"; }  /* md-attachment        attach files to a message */
+.ic-file-doc::before { content: "\f09ee"; } /* md-file_document_outline  attachment chips */
 
 /* The nerd-font merge mixes icon grids, so identical font-sizes do not give
    identical optical sizes. Ink heights, measured from the font itself:

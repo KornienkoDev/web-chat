@@ -15,7 +15,10 @@
 //   * "list of ... fruits"/"code block" returns real Markdown (list + fenced
 //     code) so the renderer's copy button path is covered;
 //   * "count from A to B" streams A..B one per line so the Stop button has a
-//     long enough stream to actually interrupt.
+//     long enough stream to actually interrupt;
+//   * multimodal user messages (attachment parts) are flattened back to text,
+//     images become "[image]" markers, and the default echo counts them as
+//     "(saw N image(s))" so the attachment tests can prove they reached the API.
 const http = require('node:http');
 
 const PORT = Number(process.env.PORT || 11435);
@@ -123,6 +126,15 @@ function knownFacts(msgs) {
   return [...block[0].matchAll(/^\s*-\s+(.+)$/gm)].map((m) => m[1].trim());
 }
 
+// Flattens an OpenAI message content — a plain string, or the multimodal parts
+// array webchat builds for messages with attachments — into plain text. Image
+// parts become a visible marker so replies can echo that they "saw" them.
+function flattenContent(c) {
+  if (typeof c === 'string') return c;
+  if (!Array.isArray(c)) return '';
+  return c.map((p) => (p.type === 'text' ? (p.text || '') : p.type === 'image_url' ? '[image]' : '')).join(' ').trim();
+}
+
 // Turns a first-person self-intro into third-person durable facts. Phrasing and
 // the uppercase-name/` is` guards keep chit-chat and questions from matching.
 function extractFacts(text) {
@@ -164,7 +176,7 @@ const server = http.createServer(async (req, res) => {
     catch { res.writeHead(400); return res.end('{"error":"bad json"}'); }
 
     const msgs = body.messages || [];
-    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')?.content || '';
+    const lastUser = flattenContent([...msgs].reverse().find((m) => m.role === 'user')?.content);
     const afterTool = msgs.some((m) => m.role === 'tool');
     const id = `chatcmpl-mock-${++reqId}`;
     // With thinking enabled the mock first streams a fake chain of thought as
@@ -211,10 +223,14 @@ const server = http.createServer(async (req, res) => {
     if (/\b(markdown|code block)\b/i.test(lastUser) || /\blist of\b.*\b(fruit|fruits)\b/i.test(lastUser)) {
       return streamText(res, id, MARKDOWN_REPLY, undefined, thinking ? think : '');
     }
-    // 5) Default echo; surface the injected memory so recall is observable.
+    // 5) Default echo; surface the injected memory so recall is observable,
+    // and count any [image] markers so attachment tests can prove the vision
+    // parts actually reached the model.
     const known = knownFacts(msgs);
     const memory = known.length ? `  (I remember: ${known.slice(0, 3).join('; ')})` : '';
-    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}`, undefined, thinking ? think : '');
+    const imgs = (lastUser.match(/\[image\]/g) || []).length;
+    const vision = imgs ? `  (saw ${imgs} image${imgs > 1 ? 's' : ''})` : '';
+    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}${vision}`, undefined, thinking ? think : '');
   }
 
   res.writeHead(404, { 'Content-Type': 'application/json' });

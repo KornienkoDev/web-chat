@@ -15,13 +15,15 @@ export function initSession(h) {
   hooks = h;
 }
 
-export async function sendMessage(text) {
+export async function sendMessage(text, attachments) {
   text = (text || '').trim();
-  if (!text || state.streaming) return;
+  if ((!text && !attachments?.length) || state.streaming) return;
 
   const chat = activeChat() || newChat();
-  chat.messages.push({ role: 'user', content: text, ts: Date.now() });
-  if (chat.title === 'New chat') chat.title = text.slice(0, 40);
+  const msg = { role: 'user', content: text, ts: Date.now() };
+  if (attachments?.length) msg.attachments = attachments;
+  chat.messages.push(msg);
+  if (chat.title === 'New chat') chat.title = (text || attachments[0].name).slice(0, 40);
   hooks.clearInput();
   hooks.renderAll();
   await streamReply(chat);
@@ -109,7 +111,8 @@ export async function editUserMessage(index, text) {
   const chat = activeChat();
   const msg = chat?.messages[index];
   text = (text || '').trim();
-  if (!msg || msg.role !== 'user' || !text || text === msg.content) return false;
+  // An attachment-only message is allowed to go empty on text; a plain one may not.
+  if (!msg || msg.role !== 'user' || text === msg.content || (!text && !msg.attachments?.length)) return false;
   // The auto-title mirrors the first message — keep it in step with the edit.
   if (index === 0 && chat.title === msg.content.slice(0, 40)) chat.title = text.slice(0, 40);
   msg.content = text;

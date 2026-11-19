@@ -14,7 +14,7 @@ import { initHeader, renderHeader } from './ui/header.js';
 import { initMessages, renderMessages, appendMessageEl, renderLiveText, updateSavedFacts, atBottom, scrollToBottom } from './ui/messages.js';
 import { updateProcess } from './ui/timeline.js';
 import { initSidebar, renderChatList, renderMemCount } from './ui/sidebar.js';
-import { initComposer, clearInput, setStreamingUI } from './ui/composer.js';
+import { initComposer, clearInput, setStreamingUI, attachFiles } from './ui/composer.js';
 import { initSettings } from './ui/settings.js';
 import { initMemoryPanel } from './ui/memoryPanel.js';
 import { exportData, importData } from './io.js';
@@ -76,7 +76,7 @@ function boot() {
   window.__wc = {
     state, $, activeChat, newChat, openChat, sendMessage, stopStreaming, regenerate, editUserMessage,
     fetchModels, addMemory, deleteMemory, renderAll, saveSettings, loadSettings,
-    loadMemory, exportData, importData,
+    loadMemory, exportData, importData, attachFiles,
     input: $('input'),
     fetchMcpTools,
   };

@@ -358,6 +358,72 @@ check('new reply answers the edit',
 check('auto-title follows the edited first message',
   await evalJs(`__wc.activeChat().title`) === 'edited probe one');
 
+// ---------- Section: attachments (text documents + images) ----------
+await evalJs(`__wc.newChat()`);
+// A staged document shows a chip; the ✕ removes it and the same file can be
+// staged again (the file input is reset after each pick).
+const staged = await evalJs(`(async () => {
+  const doc = new File(['DOC-MARKER-42 the secret weapon is a rubber duck'], 'notes.txt', { type: 'text/plain' });
+  const n = await __wc.attachFiles([doc]);
+  const chips = document.querySelectorAll('#attachBar .attach-chip').length;
+  document.querySelector('#attachBar .attach-x').click();
+  const after = document.querySelectorAll('#attachBar .attach-chip').length;
+  const again = await __wc.attachFiles([doc]);
+  return { n, chips, after, again };
+})()`, true);
+check('document stages as a chip, ✕ removes it', staged.n === 1 && staged.chips === 1
+  && staged.after === 0 && staged.again === 1, JSON.stringify(staged));
+// Sending with an EMPTY input but a staged document must work, and the
+// document's text has to reach the model inline (non-vision-safe path).
+await evalJs(`document.getElementById('btnSend').click(); true`);
+check('attachment-only send completes', await waitIdle());
+const attMsg = await evalJs(`__wc.activeChat().messages[0]`);
+check('user message holds the document',
+  attMsg?.role === 'user' && attMsg.attachments?.[0]?.kind === 'text'
+  && attMsg.attachments[0].name === 'notes.txt' && /DOC-MARKER-42/.test(attMsg.attachments[0].text),
+  JSON.stringify(attMsg));
+check('document text reached the model',
+  /DOC-MARKER-42/.test(await evalJs(`__wc.activeChat().messages[1].content`)));
+check('auto-title falls back to the file name',
+  await evalJs(`__wc.activeChat().title`) === 'notes.txt');
+// An image: a real PNG painted on a canvas, staged, then sent with a caption.
+const imgStaged = await evalJs(`(async () => {
+  const c = document.createElement('canvas'); c.width = 40; c.height = 30;
+  const x = c.getContext('2d'); x.fillStyle = 'red'; x.fillRect(0, 0, 40, 30);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+  await __wc.attachFiles([new File([blob], 'photo.png', { type: 'image/png' })]);
+  return document.querySelectorAll('#attachBar .attach-chip .attach-thumb').length;
+})()`, true);
+check('image stages with a thumbnail', imgStaged === 1);
+await evalJs(`__wc.input.value = 'look at this';
+  document.getElementById('btnSend').click(); true`);
+check('captioned image send completes', await waitIdle());
+const imgOut = await evalJs(`(() => {
+  const u = __wc.activeChat().messages[2];
+  const a = __wc.activeChat().messages[3].content;
+  return { kind: u.attachments?.[0]?.kind, url: (u.attachments?.[0]?.dataUrl || '').slice(0, 11),
+           caption: u.content, reply: a,
+           imgs: document.querySelectorAll('.msg.user .msg-attach .attach-img').length };
+})()`);
+check('image rides on the message as a data URL',
+  imgOut.kind === 'image' && imgOut.url === 'data:image/' && imgOut.caption === 'look at this',
+  JSON.stringify({ kind: imgOut.kind, url: imgOut.url }));
+check('image_url parts reached the model', /saw 1 image/.test(imgOut.reply), imgOut.reply.slice(-60));
+check('thumbnail rendered in the bubble', imgOut.imgs === 1);
+check('document preview expands inside the bubble', await evalJs(`(() => {
+  const d = document.querySelector('.msg.user .attach-doc');
+  if (!d) return false;
+  d.open = true;
+  return /DOC-MARKER-42/.test(d.querySelector('.attach-doc-text').textContent);
+})()`));
+// Attachments are plain records: they live in localStorage like the chats do.
+await reload();
+check('attachments survive reload', await evalJs(`(() => {
+  const msg = [...__wc.state.chats.values()].flatMap((c) => c.messages)
+    .find((m) => m.attachments?.some((a) => a.kind === 'image'));
+  return !!msg && !!document.querySelector('.attach-img');
+})()`));
+
 // ---------- Section: import / export ----------
 const io = await evalJs(`(async () => {
   const data = { app: 'web_chat', version: 1,
