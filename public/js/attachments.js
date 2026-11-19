@@ -2,20 +2,32 @@
 // plain records that ride along on a user message ({id, name, mime, kind,
 // text? | dataUrl?}) and survive localStorage. Images are downscaled in a
 // canvas first — a phone photo left untouched would eat both the browser
-// storage budget and the proxy's 8 MB body limit whole; a ≤1280 px JPEG gives
-// any vision model plenty while costing a fraction. Text documents are read as
-// UTF-8 and cut at a prompt-friendly cap so one huge file cannot crowd out
-// the conversation. Touches no app state and no chat elements — the composer
-// stages what this returns.
-import { uid } from './state.js';
+// storage budget and the proxy's 8 MB body limit whole; the default max side
+// of 1280 px gives any vision model plenty while costing a fraction. Text
+// documents are read as UTF-8 and cut at a prompt-friendly cap so one huge
+// file cannot crowd out the conversation. Reads its size caps from
+// state.settings (Settings → attachment fields) but mutates no app state and
+// touches no chat elements — the composer stages what this returns.
+import { state, uid } from './state.js';
 
 export const MAX_ATTACHMENTS = 6;
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // what we accept picking
-const IMAGE_MAX_SIDE = 1280;              // plenty for a vision model's tile grid
+// Settings keys for the per-file caps. Clamped here (not in the form) so an
+// empty or nonsense value always lands on a workable number. The image caps
+// guard the proxy's 8 MB request-body limit: a ≤4096 px JPEG at q0.85
+// base64s to less than IMAGE_DATA_MAX, and the history must fit beside it.
+const ATTACH_CAPS = {
+  attachTextChars: { def: 16000, min: 500, max: 500000 }, // prompt budget per text doc
+  attachImageSide: { def: 1280, min: 128, max: 4096 },    // plenty for a vision model's tile grid
+  attachImageMb: { def: 10, min: 1, max: 20 },            // what we accept picking
+};
 const IMAGE_DATA_MAX = 3.5 * 1024 * 1024; // base64 must still fit the proxy beside history
-const MAX_TEXT_BYTES = 512 * 1024;        // read budget per document
-const MAX_TEXT_CHARS = 8000;              // prompt budget per document
+
+function cap(key) {
+  const { def, min, max } = ATTACH_CAPS[key];
+  const n = Number(state.settings[key]);
+  return Number.isFinite(n) && n > 0 ? Math.min(max, Math.max(min, n)) : def;
+}
 
 // Extension whitelist for text docs: mime is unreliable (editors label .md as
 // octet-stream, browsers label odd files as text/plain), so both paths count.
@@ -56,14 +68,18 @@ export async function readFiles(files) {
 
 // ---------- Text documents ----------
 async function readText(file) {
+  const maxChars = cap('attachTextChars');
   // Slice before decoding: a runaway file never gets fully loaded into memory.
-  const buf = await file.slice(0, MAX_TEXT_BYTES).arrayBuffer();
+  // UTF-8 costs at most 4 bytes per character, so the derived byte budget
+  // always yields enough characters to fill the prompt budget.
+  const readBytes = maxChars * 4;
+  const buf = await file.slice(0, readBytes).arrayBuffer();
   let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
   // NULs mean we walked into a binary that claimed a text extension.
   if (text.includes('\u0000')) throw new Error('not a text file');
-  let truncated = file.size > MAX_TEXT_BYTES;
-  if (text.length > MAX_TEXT_CHARS) {
-    text = text.slice(0, MAX_TEXT_CHARS);
+  let truncated = file.size > readBytes;
+  if (text.length > maxChars) {
+    text = text.slice(0, maxChars);
     truncated = true;
   }
   text = text.replace(/\r\n/g, '\n').trim();
@@ -76,13 +92,14 @@ async function readText(file) {
 // canvas, and re-encoded JPEG q0.85. Small PNGs keep their original bytes so
 // transparency and lossless detail survive when they cost nothing.
 async function readImage(file) {
-  if (file.size > MAX_IMAGE_BYTES) throw new Error('image too large (max 10 MB)');
+  const maxMb = cap('attachImageMb');
+  if (file.size > maxMb * 1024 * 1024) throw new Error(`image too large (max ${maxMb} MB)`);
   const bmp = await decodeImage(file);
   try {
     const w = bmp.width;
     const h = bmp.height;
     if (!w || !h) throw new Error('unreadable image');
-    const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(w, h));
+    const scale = Math.min(1, cap('attachImageSide') / Math.max(w, h));
     if (scale < 1 || file.size > 1024 * 1024 || file.type === 'image/jpeg') {
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(w * scale));

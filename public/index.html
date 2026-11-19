@@ -113,6 +113,18 @@
       </div>
       <label class="field"><span>System prompt</span>
         <textarea id="setSystem" rows="3" placeholder="Optional"></textarea></label>
+      <div class="field-row">
+        <label class="field"><span>Text attachment limit (chars)</span>
+          <input id="setAttachTextChars" type="number" min="500" max="500000" step="1000" placeholder="16000"
+            title="Longer documents are cut here and marked as truncated"></label>
+        <label class="field"><span>Image max side (px)</span>
+          <input id="setAttachImageSide" type="number" min="128" max="4096" placeholder="1280"
+            title="Images are downscaled to this max side before sending"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Max image size (MB)</span>
+          <input id="setAttachImageMb" type="number" min="1" max="20" placeholder="10"></label>
+      </div>
       <details class="field mcp-details" id="setMcpDetails">
         <summary>MCP servers</summary>
         <div id="mcpList" class="mcp-list"><span class="muted">Open to load…</span></div>

@@ -79,6 +79,9 @@ function readForm() {
     contextMessages: $('setContext').value.trim(),
     system: $('setSystem').value,
     thinking: $('setThinking').value,
+    attachTextChars: $('setAttachTextChars').value.trim(),
+    attachImageSide: $('setAttachImageSide').value.trim(),
+    attachImageMb: $('setAttachImageMb').value.trim(),
     mock: $('setMock').checked,
     mcpDisabled: mcpBoxes.length
       ? mcpBoxes.filter((b) => !b.checked).map((b) => b.value).join(',')
@@ -118,6 +121,9 @@ function fillForm() {
   $('setContext').value = s.contextMessages;
   $('setSystem').value = s.system;
   $('setThinking').value = s.thinking;
+  $('setAttachTextChars').value = s.attachTextChars;
+  $('setAttachImageSide').value = s.attachImageSide;
+  $('setAttachImageMb').value = s.attachImageMb;
   fillModelList();
 }
 

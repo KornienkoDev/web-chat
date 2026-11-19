@@ -11,6 +11,11 @@ export const DEFAULT_SETTINGS = {
   contextMessages: '20',
   system: '',
   thinking: 'default',
+  // Attachment caps, clamped in attachments.js at read time (empty or out of
+  // range falls back to the default there).
+  attachTextChars: '16000', // prompt budget per text attachment
+  attachImageSide: '1280',  // images are downscaled to at most this side, px
+  attachImageMb: '10',      // largest image file accepted, MB
   autoExtract: false, // fallback learner for models without tool support
   mcpDisabled: '', // comma-separated MCP server names unchecked in Settings
   mock: false, // pin all requests to MOCK_BASE_URL; the real baseUrl stays saved

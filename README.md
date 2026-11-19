@@ -66,9 +66,11 @@ field greys out while the toggle is on).
   sent back to the model).
 - **Attachments: images + text documents** — a paperclip (or paste, or drag &
   drop) stages up to 6 files as removable chips above the composer. Images are
-  downscaled to ≤1280 px JPEG **in the browser** (never a server) and sent to
+  downscaled to a JPEG (max side and file-size caps configurable in Settings)
+  **in the browser** (never a server) and sent to
   vision-capable models as OpenAI `image_url` parts; `.txt`/`.md`/code files are
-  read as text and inlined into the prompt, so even non-vision models can read
+  read as text and inlined into the prompt up to a configurable character cap,
+  so even non-vision models can read
   them. Thumbnails and expandable document previews stay in the message bubble,
   and attachments persist in `localStorage` with the chats.
 - **Mobile-first responsive UI** — drawer sidebar on phones, safe-area aware,
