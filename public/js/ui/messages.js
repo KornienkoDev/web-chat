@@ -233,42 +233,58 @@ function startEdit(msgEl, index) {
 // data URL came from our own FileReader), documents as one-line chips that
 // expand to the text. Everything lands via textContent/img.src — model output
 // never reaches this path, and neither do file names.
+//
+// Images are grouped into rows of two (see the CSS note on .attach-row): a
+// single wrapping container would stretch the bubble to the width of one
+// hypothetical all-in-a-line row, leaving a dead strip beside the grid.
+const IMG_ROW_SIZE = 2;
+
 function attachmentsEl(m) {
   const wrap = document.createElement('div');
   wrap.className = 'msg-attach';
-  for (const a of m.attachments) {
-    if (a.kind === 'image' && a.dataUrl) {
-      const img = document.createElement('img');
-      img.className = 'attach-img';
-      img.src = a.dataUrl;
-      // Dimension attributes hand the engine the aspect ratio directly: the
-      // picture then keeps its shape in every browser and reserves its space
-      // before the data URL paints. Older records may lack w/h — skip then.
-      if (a.w && a.h) { img.width = a.w; img.height = a.h; }
-      img.alt = a.name;
-      img.title = a.name;
-      img.loading = 'lazy';
-      wrap.appendChild(img);
-    } else {
-      const det = document.createElement('details');
-      det.className = 'attach-doc';
-      const sum = document.createElement('summary');
-      const icon = document.createElement('span');
-      icon.className = 'ic ic-file-doc';
-      icon.setAttribute('aria-hidden', 'true');
-      const name = document.createElement('span');
-      name.className = 'attach-doc-name';
-      name.textContent = a.name;
-      sum.append(icon, name);
-      det.appendChild(sum);
-      const pre = document.createElement('pre');
-      pre.className = 'attach-doc-text';
-      pre.textContent = a.text || '';
-      det.appendChild(pre);
-      wrap.appendChild(det);
-    }
+  const images = m.attachments.filter((a) => a.kind === 'image' && a.dataUrl);
+  const others = m.attachments.filter((a) => !(a.kind === 'image' && a.dataUrl));
+  for (let i = 0; i < images.length; i += IMG_ROW_SIZE) {
+    const row = document.createElement('div');
+    row.className = 'attach-row';
+    for (const a of images.slice(i, i + IMG_ROW_SIZE)) row.appendChild(attachImg(a));
+    wrap.appendChild(row);
   }
+  for (const a of others) wrap.appendChild(attachDoc(a));
   return wrap;
+}
+
+function attachImg(a) {
+  const img = document.createElement('img');
+  img.className = 'attach-img';
+  img.src = a.dataUrl;
+  // Dimension attributes hand the engine the aspect ratio directly: the
+  // picture then keeps its shape in every browser and reserves its space
+  // before the data URL paints. Older records may lack w/h — skip then.
+  if (a.w && a.h) { img.width = a.w; img.height = a.h; }
+  img.alt = a.name;
+  img.title = a.name;
+  img.loading = 'lazy';
+  return img;
+}
+
+function attachDoc(a) {
+  const det = document.createElement('details');
+  det.className = 'attach-doc';
+  const sum = document.createElement('summary');
+  const icon = document.createElement('span');
+  icon.className = 'ic ic-file-doc';
+  icon.setAttribute('aria-hidden', 'true');
+  const name = document.createElement('span');
+  name.className = 'attach-doc-name';
+  name.textContent = a.name;
+  sum.append(icon, name);
+  det.appendChild(sum);
+  const pre = document.createElement('pre');
+  pre.className = 'attach-doc-text';
+  pre.textContent = a.text || '';
+  det.appendChild(pre);
+  return det;
 }
 
 function savedFactsEl(m) {

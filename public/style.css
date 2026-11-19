@@ -280,24 +280,22 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   font-variant-numeric: tabular-nums;
 }
 
-/* Files a user message carries: images as thumbnails, documents as chips that
-   expand to their text (a <details>, so keyboard and mobile work for free). */
-.msg-attach {
+/* Files a user message carries: image thumbnails in JS-built rows of two
+   (ui/messages.js), documents as chips that expand to their text (a
+   <details>, so keyboard and mobile work for free). The rows are real
+   elements, not one wrapping flex container: a wrapper reports its UNWRAPPED
+   max-content to the bubble's fit-content sizing, stretching the bubble to
+   the width of one hypothetical all-in-a-line row — dead space beside the
+   actual grid, the exact "outline wider than the pictures" bug. */
+.msg-attach { margin-bottom: 6px; }
+.attach-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: wrap;            /* escape hatch on very narrow columns */
+  justify-content: flex-end;  /* rows stay flush with the bubble's right edge */
+  align-items: flex-start;    /* never stretch an image cross-axis */
   gap: 6px;
-  margin-bottom: 6px;
-  align-items: flex-start; /* never stretch the image cross-axis: some engines
-                              distort an img flex item instead of keeping ratio */
-  /* The width cap belongs HERE, in plain px, not as min(280px, 100%) on the
-     img: a percentage inside the img's max-width blows up the bubble's
-     fit-content sizing and leaves ~110px of dead space beside the picture. */
-  max-width: 280px;
 }
-/* Two or more images: let the strip grow into a horizontal row of up to three,
-   wrapping on narrow screens. A lone image keeps the bubble hugging it. */
-.msg-attach:has(.attach-img ~ .attach-img) { max-width: 852px; } /* 3 x 280 + 2 x 6 */
-.msg.user .msg-attach { justify-content: flex-end; }
+.attach-row + .attach-row { margin-top: 6px; }
 .attach-img {
   display: block;
   /* shrinkable but never grown: images sit side by side when they fit and
@@ -314,6 +312,9 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border-radius: 8px;
 }
 .attach-doc {
+  /* block in .msg-attach: hug the text, ride the right edge like the rows */
+  width: fit-content;
+  margin-left: auto;
   max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
