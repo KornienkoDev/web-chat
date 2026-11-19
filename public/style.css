@@ -520,7 +520,11 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 #input::-webkit-scrollbar { display: none; }
 #input:focus { border-color: var(--ring); }
 
-/* The paperclip mirrors the send key inside the field's left edge. */
+/* The paperclip mirrors the send key inside the field's left edge. Only the
+   glyph reacts on hover — no background pill. Returning from the file dialog
+   leaves the button focused, and Chromium then draws a focus ring and keeps
+   the hover tint alive; :focus therefore reverts to the plain colour and the
+   outline is dropped, so the clip never looks stuck-highlighted. */
 .attach-btn {
   position: absolute;
   left: 6px;
@@ -531,8 +535,10 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border-radius: 999px;
   font-size: 18px;
   color: var(--text-dim);
+  outline: none;
 }
-.attach-btn:hover, .attach-btn:active { color: var(--text); background: var(--hover-tint); }
+.attach-btn:hover { color: var(--text); }
+.attach-btn:focus { color: var(--text-dim); }
 
 /* Staged files, chips above the field: image chips get a thumbnail, document
    chips an icon; the ✕ puts the file back where it came from. */
