@@ -89,7 +89,7 @@ Conventional-ish, lowercase, imperative, short: `feat: …`, `fix: …`, `style:
 
 - `memories.json` and `memories.json.*.tmp` are gitignored — never commit them,
   and never run the CDP suite against a server using the real one.
-- Icon font: all icons come from the 20-codepoint subset
+- Icon font: all icons come from the 21-codepoint subset
   `public/fonts/wc-icons.woff2`. Adding an icon means updating the codepoint list in
   `tools/subset-icons.sh` **and** a `.ic-*` rule in `style.css` (or the
   `summary::before` chevron codepoint) and rebuilding with `tools/subset-icons.sh`

@@ -2,7 +2,7 @@
 # Rebuild the icon font subset: public/fonts/wc-icons.woff2
 #
 # The app draws every icon from one Material Design glyph set that ships inside
-# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 20 below are used, so the
+# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 21 below are used, so the
 # subset gets them in 3 KB instead. Keep this list in sync with the .ic-* rules
 # in style.css — a missing codepoint renders as a blank box, silently. The one
 # exception is the disclosure chevron: it styles the <summary>'s ::before
@@ -22,7 +22,8 @@ CODEPOINTS=(
   U+F0066   # md-attachment     composer attach-files button
   U+F012C   # md-check          "copied" feedback
   U+F0142   # md-chevron_right  thinking-block disclosure (replaces the native triangle)
-  U+F0156   # md-close          delete chat, forget memory, clear
+  U+F0156   # md-close          forget memory, clear, attachment ✕, cancel
+  U+F01B4   # md-delete         delete chat (recycle bin; same ink height as the pencil beside it)
   U+F018F   # md-content_copy   copy message / copy code
   U+F01DA   # md-download       sidebar import (arrow down: a file comes in)
   U+F0552   # md-upload         sidebar export  (arrow up: a file goes out)

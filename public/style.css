@@ -630,6 +630,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .ic-copy::before   { content: "\f018f"; }  /* md-content_copy */
 .ic-check::before  { content: "\f012c"; }  /* md-check */
 .ic-close::before  { content: "\f0156"; }  /* md-close */
+.ic-delete::before { content: "\f01b4"; }  /* md-delete   recycle bin: delete chat */
 .ic-pencil::before { content: "\f03eb"; }  /* md-pencil */
 .ic-plus::before   { content: "\f0415"; }  /* md-plus */
 .ic-alert::before  { content: "\f0026"; }  /* md-alert */

@@ -86,7 +86,7 @@ export function renderChatList() {
     });
 
     const btnDel = document.createElement('button');
-    btnDel.className = 'chat-item-btn chat-item-del ic ic-close';
+    btnDel.className = 'chat-item-btn chat-item-del ic ic-delete';
     btnDel.title = 'Delete';
     btnDel.setAttribute('aria-label', `Delete “${c.title || 'Untitled'}”`);
     btnDel.addEventListener('click', async (e) => {
