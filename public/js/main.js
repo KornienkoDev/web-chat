@@ -11,7 +11,7 @@ import { on } from './events.js';
 import { $, initFeedback } from './ui/dom.js';
 import { initTheme } from './ui/theme.js';
 import { initHeader, renderHeader } from './ui/header.js';
-import { initMessages, renderMessages, appendMessageEl, renderLiveText, updateSavedFacts, atBottom, scrollToBottom } from './ui/messages.js';
+import { initMessages, renderMessages, appendMessageEl, mountLiveThink, renderLiveText, updateSavedFacts, atBottom, scrollToBottom } from './ui/messages.js';
 import { initSidebar, renderChatList, renderMemCount } from './ui/sidebar.js';
 import { initComposer, clearInput, setStreamingUI } from './ui/composer.js';
 import { initSettings } from './ui/settings.js';
@@ -38,6 +38,7 @@ function boot() {
     renderAll,
     appendMessage: appendMessageEl,
     renderText: renderLiveText,
+    openThink: mountLiveThink,
     updateSavedFacts,
     clearInput,
     setStreaming: setStreamingUI,

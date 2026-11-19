@@ -24,8 +24,9 @@ export async function fetchModels() {
   return state.models;
 }
 
-// Streams one completion; resolves to { text, toolCalls: [{id, name, args}] }.
-// `opts` overrides request fields: temperature, max_tokens, thinking, tools.
+// Streams one completion; resolves to { text, reasoning, toolCalls: [{id, name, args}] }.
+// `opts` overrides request fields: temperature, max_tokens, thinking, tools,
+// onReasoning (live callback for the model's thinking tokens).
 export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) {
   const res = await fetch('/api/chat', {
     method: 'POST',
@@ -53,6 +54,7 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
   const decoder = new TextDecoder();
   let buf = '';
   let text = '';
+  let reasoning = '';
   const toolCalls = new Map(); // index -> {id, name, args}
   for (;;) {
     const { done, value } = await reader.read();
@@ -70,6 +72,11 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       if (obj.error) throw new Error(obj.error.message || 'LLM error');
       const delta = obj.choices?.[0]?.delta;
       if (!delta) continue;
+      // Thinking tokens: llama.cpp/Qwen serve them as a separate delta field.
+      if (delta.reasoning_content) {
+        reasoning += delta.reasoning_content;
+        opts.onReasoning?.(delta.reasoning_content);
+      }
       if (delta.content) { text += delta.content; onDelta(delta.content); }
       // Streamed tool calls arrive as fragments keyed by index.
       for (const tcd of delta.tool_calls || []) {
@@ -82,5 +89,5 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       }
     }
   }
-  return { text, toolCalls: [...toolCalls.values()].filter((t) => t.name) };
+  return { text, reasoning, toolCalls: [...toolCalls.values()].filter((t) => t.name) };
 }

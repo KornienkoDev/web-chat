@@ -36,8 +36,14 @@ function safeWriter(res) {
   };
 }
 
-async function streamText(res, id, text, delay = 15) {
+async function streamText(res, id, text, delay = 15, reasoning = '') {
   const w = safeWriter(res);
+  for (const word of reasoning.match(/\S+\s*/g) || []) {
+    if (!w.live) break;
+    w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
+      choices: [{ index: 0, delta: { reasoning_content: word }, finish_reason: null }] }));
+    await sleep(delay);
+  }
   for (const word of text.match(/\S+\s*/g) || []) {
     if (!w.live) break;
     w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
@@ -142,6 +148,11 @@ const server = http.createServer(async (req, res) => {
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user')?.content || '';
     const afterTool = msgs.some((m) => m.role === 'tool');
     const id = `chatcmpl-mock-${++reqId}`;
+    // With thinking enabled the mock first streams a fake chain of thought as
+    // reasoning_content deltas, like llama.cpp does for Qwen-style models.
+    const thinking = body.chat_template_kwargs?.enable_thinking === true;
+    const think = `The user wrote: "${lastUser.slice(0, 60)}". `
+      + 'Let me pick a short, friendly reply that also shows I parsed the request. ';
 
     // 1) Memory tool: save each durable fact, one tool call each.
     const facts = extractFacts(lastUser);
@@ -150,7 +161,7 @@ const server = http.createServer(async (req, res) => {
     }
     // 2) The model's spoken reply after its tool calls ran.
     if (afterTool) {
-      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)})`);
+      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)})`, undefined, thinking ? think : '');
     }
     // 3) Counting: a long, interruptible stream for the Stop button.
     let m;
@@ -162,12 +173,12 @@ const server = http.createServer(async (req, res) => {
     }
     // 4) Markdown demo.
     if (/\b(markdown|code block)\b/i.test(lastUser) || /\blist of\b.*\b(fruit|fruits)\b/i.test(lastUser)) {
-      return streamText(res, id, MARKDOWN_REPLY);
+      return streamText(res, id, MARKDOWN_REPLY, undefined, thinking ? think : '');
     }
     // 5) Default echo; surface the injected memory so recall is observable.
     const known = knownFacts(msgs);
     const memory = known.length ? `  (I remember: ${known.slice(0, 3).join('; ')})` : '';
-    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}`);
+    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}`, undefined, thinking ? think : '');
   }
 
   res.writeHead(404, { 'Content-Type': 'application/json' });

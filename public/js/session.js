@@ -9,8 +9,8 @@ import { autoExtract } from './memory.js';
 let hooks = null;
 
 // hooks: { renderAll, appendMessage(msg) -> {el, textEl}, renderText(textEl, text),
-//          updateSavedFacts(el, msg), clearInput, setStreaming(on),
-//          scrollToBottom, atBottom }
+//          openThink(el, msg) -> thinkTextEl, updateSavedFacts(el, msg),
+//          clearInput, setStreaming(on), scrollToBottom, atBottom }
 export function initSession(h) {
   hooks = h;
 }
@@ -32,6 +32,16 @@ export async function sendMessage(text) {
   chat.messages.push(asst);
   const { el, textEl } = hooks.appendMessage(asst);
 
+  // Thinking tokens stream into a collapsible that is open while generating;
+  // the final renderAll rebuilds the bubble with it collapsed by default.
+  let thinkTextEl = null;
+  const onReasoning = (delta) => {
+    asst.reasoning = (asst.reasoning || '') + delta;
+    if (!thinkTextEl) thinkTextEl = hooks.openThink(el, asst);
+    thinkTextEl.textContent = asst.reasoning;
+    if (hooks.atBottom()) hooks.scrollToBottom();
+  };
+
   // Coalesce bursts of streamed tokens into one Markdown repaint per animation
   // frame, and only follow the stream while the user hasn't scrolled up.
   let frame = 0;
@@ -48,12 +58,12 @@ export async function sendMessage(text) {
   const onSaved = () => hooks.updateSavedFacts(el, asst);
 
   try {
-    await runChatTurn(chat, asst, onText, onSaved, state.controller.signal);
-    if (!asst.content && !asst.savedFacts?.length) asst.content = '(empty response)';
+    await runChatTurn(chat, asst, onText, onSaved, onReasoning, state.controller.signal);
+    if (!asst.content && !asst.savedFacts?.length && !asst.reasoning) asst.content = '(empty response)';
     autoExtract(chat);
   } catch (e) {
     if (e.name === 'AbortError') {
-      if (!asst.content && !asst.savedFacts?.length) chat.messages.pop();
+      if (!asst.content && !asst.savedFacts?.length && !asst.reasoning) chat.messages.pop();
     } else {
       chat.messages.pop();
       chat.messages.push({ role: 'error', content: e.message, ts: Date.now() });

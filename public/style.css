@@ -280,6 +280,31 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   font-variant-numeric: tabular-nums;
 }
 
+/* Collapsible model reasoning, above the reply text inside the bubble. */
+.msg-think {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.msg-think > summary {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  min-height: 20px; /* comfortable tap target */
+}
+.msg-think[open] > summary { margin-bottom: 6px; }
+.msg-think-text {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  max-height: 320px; /* long chains scroll instead of eating the screen */
+  overflow-y: auto;
+}
+
 /* Markdown-rendered assistant replies: HTML structure handles whitespace. */
 .msg.md .msg-text { white-space: normal; }
 .msg.md .msg-text > :first-child { margin-top: 0; }

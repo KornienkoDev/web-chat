@@ -35,7 +35,9 @@ function formatGap(ms) {
 function stampHistory(msgs) {
   let prev = null;
   return msgs.map((m) => {
-    const { ts, ...clean } = m; // upstream APIs may reject unknown fields like ts
+    // Upstream APIs may reject unknown fields like ts and reasoning (thinking
+    // is display-only history; models do not expect their own past reasoning).
+    const { ts, reasoning, savedFacts, ...clean } = m;
     if (!ts) { prev = null; return clean; }
     const tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
     prev = ts;
@@ -64,11 +66,12 @@ export function buildApiMessages(chat) {
 
 // One user turn: keep calling the model while it invokes the memory tool,
 // executing tool calls locally and feeding the results back. Max 3 rounds.
-export async function runChatTurn(chat, asst, onText, onSaved, signal) {
+// onReasoning streams the model's thinking tokens for the live collapsible.
+export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, signal) {
   const apiMessages = buildApiMessages(chat);
   for (let round = 0; round < 3; round++) {
     const { text, toolCalls } = await streamCompletion(
-      apiMessages, onText, signal, { tools: [MEMORY_TOOL] });
+      apiMessages, onText, signal, { tools: [MEMORY_TOOL], onReasoning });
     if (!toolCalls.length) return;
 
     const toolResults = [];
