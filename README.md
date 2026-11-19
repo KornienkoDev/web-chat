@@ -1,5 +1,7 @@
 # Local Web Chat
 
+![Local Web Chat: a chat with a Markdown reply, a copyable code block and the composer's send key inside the field](docs/screenshot.png)
+
 A small, fast, self-hosted chat UI for a **locally served LLM**. No build step,
 no dependencies — just Node and a browser. The whole frontend runs on the
 machine and the conversation never leaves it.
