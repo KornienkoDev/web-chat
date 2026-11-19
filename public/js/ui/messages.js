@@ -180,6 +180,16 @@ function startEdit(msgEl, index) {
     btn('ic-close msg-edit-cancel', 'Cancel', () => finish(false)),
     btn('ic-check msg-edit-save', 'Save & resend', () => finish(true)),
   );
+  // The send time rides along on the button row (the meta row hides while
+  // editing) so the bubble's bottom edge keeps its usual shape.
+  const srcTime = msgEl.querySelector('.msg-time');
+  if (srcTime) {
+    const time = document.createElement('span');
+    time.className = 'msg-time';
+    time.textContent = srcTime.textContent;
+    time.title = srcTime.title;
+    bar.prepend(time);
+  }
 
   let finished = false;
   async function finish(commit) {

@@ -667,6 +667,7 @@ html.dark #btnTheme .ic-sun { display: none; }
    stray tap from copying or memory-saving the message being rewritten, and
    16px font stops iOS from zooming the page when the field takes focus. */
 .msg.editing { width: 100%; }
+.msg.editing .msg-meta { display: none; } /* its time moves into the editor's button row */
 .msg.editing .msg-action { visibility: hidden; }
 .msg.editing .msg-edit-actions .msg-action { visibility: visible; }
 .msg-edit-input {
