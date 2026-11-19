@@ -689,7 +689,7 @@ html.dark #btnTheme .ic-sun { display: none; }
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 10px; /* a field hugging its buttons reads as one control */
 }
 /* The edit bar's buttons are explicit steps, not dim hover affordances. */
 .msg-edit-btn {
