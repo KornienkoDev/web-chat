@@ -8,8 +8,9 @@ import { autoExtract } from './memory.js';
 
 let hooks = null;
 
-// hooks: { renderAll, appendMessage(msg) -> {el, textEl}, updateSavedFacts(el, msg),
-//          clearInput, setStreaming(on), scrollToBottom, atBottom }
+// hooks: { renderAll, appendMessage(msg) -> {el, textEl}, renderText(textEl, text),
+//          updateSavedFacts(el, msg), clearInput, setStreaming(on),
+//          scrollToBottom, atBottom }
 export function initSession(h) {
   hooks = h;
 }
@@ -25,15 +26,24 @@ export async function sendMessage(text) {
   hooks.renderAll();
 
   hooks.setStreaming(true);
+  state.streaming = true;
   state.controller = new AbortController();
   const asst = { role: 'assistant', content: '' };
   chat.messages.push(asst);
   const { el, textEl } = hooks.appendMessage(asst);
 
+  // Coalesce bursts of streamed tokens into one Markdown repaint per animation
+  // frame, and only follow the stream while the user hasn't scrolled up.
+  let frame = 0;
+  const repaint = () => {
+    frame = 0;
+    if (hooks.renderText) hooks.renderText(textEl, asst.content);
+    else textEl.textContent = asst.content;
+    if (hooks.atBottom()) hooks.scrollToBottom();
+  };
   const onText = (delta) => {
     asst.content += delta;
-    textEl.textContent = asst.content;
-    if (hooks.atBottom()) hooks.scrollToBottom();
+    if (!frame) frame = requestAnimationFrame(repaint);
   };
   const onSaved = () => hooks.updateSavedFacts(el, asst);
 
@@ -49,7 +59,9 @@ export async function sendMessage(text) {
       chat.messages.push({ role: 'error', content: e.message });
     }
   }
+  if (frame) cancelAnimationFrame(frame); // drop any queued repaint; renderAll is authoritative
   state.controller = null;
+  state.streaming = false;
   touchChat(chat);
   hooks.setStreaming(false);
   hooks.renderAll();
