@@ -181,6 +181,13 @@ const server = http.createServer(async (req, res) => {
     if (searchTool && !afterTool && (sm = lastUser.match(/search for (.+)/i))) {
       return streamOneToolCall(res, id, searchTool.function.name, { query: sm[1].trim() });
     }
+    // 0b) forget_memory emulation: any "forget that X" ask names the fact to
+    // drop; the real client resolves the wording against the live list.
+    const forgetTool = (body.tools || []).find((t) => t.function?.name === 'forget_memory');
+    let fm;
+    if (forgetTool && !afterTool && (fm = lastUser.match(/(?:forget|delete the memory about|remove the memory about)\s+(?:that\s+)?(.+)/i))) {
+      return streamOneToolCall(res, id, 'forget_memory', { memory_id_or_text: fm[1].trim() });
+    }
     // 1) Memory tool: save each durable fact, one tool call each.
     const facts = extractFacts(lastUser);
     if (body.tools?.length && !afterTool && facts.length) {

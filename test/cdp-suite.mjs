@@ -106,6 +106,12 @@ check('memory written to server file', Array.isArray(memFile.memory) && memFile.
 await evalJs(`__wc.sendMessage('What is my dog called? One word.')`, true);
 check('memory injected into next turn', /pixel/i.test(await evalJs(`__wc.activeChat().messages.at(-1).content`)));
 
+// forget_memory tool: the model drops an outdated fact the user names.
+await evalJs(`__wc.sendMessage('I am not vegetarian anymore, please forget that i am vegetarian')`, true);
+const forgetOut = await evalJs(`__wc.activeChat().messages.at(-1).content`);
+const vegLeft = await evalJs(`__wc.state.memory.filter(m=>/vegetarian/i.test(m.text)).length`);
+check('forget_memory tool round-trip', vegLeft === 0 && /Forgot/i.test(forgetOut), forgetOut.slice(0, 100));
+
 // Trivia must not be saved.
 const before = await evalJs(`__wc.state.memory.length`);
 await evalJs(`__wc.sendMessage('haha lol ok whatever')`, true);

@@ -34,8 +34,12 @@ URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
   delete; everything lives in `localStorage`, nothing on the server.
 - **Memory** — the model saves durable facts about *you* by itself using a
   native `save_memory` tool call (it decides what matters mid-conversation);
-  facts are injected into every future prompt, shown as a "remembered" badge,
-  and manageable in the Memory panel (manual add, per-chat extraction, forget).
+  facts are injected into every future prompt as a dated, id-tagged list
+  (`[m2 | 2026-11-05] fact`, newest first), so the model can tell which of two
+  contradicting facts is newer and remove outdated ones itself with
+  `forget_memory` (by id or wording). The Memory panel also shows per-fact
+  dates. Facts appear as a "remembered" badge and stay manageable in the panel
+  (manual add, per-chat extraction, forget).
   Memories are persisted to a plain JSON file on the server (`memories.json`,
   override with `WC_MEMORY_FILE`) and mirrored to `localStorage`, so they
   survive clearing site data and can be edited or backed up by hand. A

@@ -4,7 +4,7 @@
 import { state } from './state.js';
 import { saveChats } from './storage.js';
 import { streamCompletion, callMcpTool } from './llm.js';
-import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE } from './memory.js';
+import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE, FORGET_TOOL, forgetMemory } from './memory.js';
 
 // Per-message clock for the model: each history message gets its send time and
 // the gap since the previous one, and the system prompt states the current
@@ -78,7 +78,9 @@ export function buildApiMessages(chat) {
 // onReasoning streams the model's thinking tokens for the live collapsible.
 export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, signal) {
   const apiMessages = buildApiMessages(chat);
-  const tools = state.mcpTools.length ? [MEMORY_TOOL, ...state.mcpTools] : [MEMORY_TOOL];
+  const tools = state.mcpTools.length
+    ? [MEMORY_TOOL, FORGET_TOOL, ...state.mcpTools]
+    : [MEMORY_TOOL, FORGET_TOOL];
   for (let round = 0; round < 6; round++) {
     const { text, toolCalls } = await streamCompletion(
       apiMessages, onText, signal, { tools, onReasoning });
@@ -97,6 +99,12 @@ export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, sign
           role: 'tool',
           tool_call_id: tc.id,
           content: added ? 'Saved.' : fact ? 'Already known.' : 'No fact given.',
+        });
+      } else if (tc.name === 'forget_memory') {
+        toolResults.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: forgetMemory(String(args.memory_id_or_text || '')),
         });
       } else if (state.mcpTools.some((t) => t.function.name === tc.name)) {
         let out;

@@ -604,6 +604,7 @@ html.dark #btnTheme .ic-sun { display: none; }
   font-size: 13.5px;
 }
 .mem-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mem-date { font-size: 11.5px; white-space: nowrap; }
 /* The chat list reveals a row's actions on hover; a memory row has no such
    affordance, so the forget cross has to stay visible. Without this the shared
    .chat-item-btn stays hidden by its base rule and the fact cannot be deleted. */

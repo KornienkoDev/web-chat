@@ -31,7 +31,30 @@ export const MEMORY_TOOL = {
 export const MEMORY_TOOL_GUIDANCE =
   'You can remember things with the save_memory tool. When the user reveals a durable ' +
   'fact about themselves, call save_memory with one concise fact per call. Decide yourself ' +
-  'what is important — do not ask permission, and do not save trivial or temporary details.';
+  'what is important — do not ask permission, and do not save trivial or temporary details. ' +
+  'If a new fact contradicts one from the memory list, save the new one and call ' +
+  'forget_memory for the outdated id.';
+
+export const FORGET_TOOL = {
+  type: 'function',
+  function: {
+    name: 'forget_memory',
+    description:
+      'Forget one saved fact from long-term memory. Use when the user says a stored fact is ' +
+      'wrong, outdated or should be removed, or when you replace an old fact with a newer one. ' +
+      'Identify the fact by its id from the memory list (e.g. "m3") or by distinctive wording.',
+    parameters: {
+      type: 'object',
+      properties: {
+        memory_id_or_text: {
+          type: 'string',
+          description: 'Memory id from the list (e.g. "m3") or a distinctive part of the fact text.',
+        },
+      },
+      required: ['memory_id_or_text'],
+    },
+  },
+};
 
 const normText = (t) => t.replace(/\s+/g, ' ').trim().toLowerCase().replace(/^(the|a|an)\s+/, '');
 
@@ -66,13 +89,67 @@ export function clearMemory() {
   emit('memory:changed');
 }
 
-// Facts injected into the system prompt so the model "knows" them.
+// Facts injected into the system prompt, newest first. Each line gets a short
+// id and the date the fact was learned, so the model can tell which of two
+// contradicting facts is newer and can name one to forget. forgetMemory()
+// resolves those ids against the refs of the latest rendered block.
+let lastRefs = []; // [{ref, id}] mirroring the ids shown in the current block
+
+function factDate(ms) {
+  const d = new Date(Number.isFinite(ms) ? ms : Date.now());
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function memoryBlock() {
   const items = state.memory.slice(0, MEMORY_INJECT);
-  if (!items.length) return '';
-  return '## Long-term memory (about the user)\n'
-    + items.map((m) => `- ${m.text}`).join('\n')
-    + '\nUse these facts naturally when relevant. Do not recite this list back.';
+  if (!items.length) { lastRefs = []; return ''; }
+  lastRefs = items.map((m, i) => ({ ref: `m${i + 1}`, id: m.id }));
+  return '## Long-term memory (about the user), newest first\n'
+    + 'Each line: [id | date learned] fact. If two facts contradict, the newer date wins.\n'
+    + items.map((m, i) => `- [${lastRefs[i].ref} | ${factDate(m.createdAt)}] ${m.text}`).join('\n')
+    + '\nUse these facts naturally when relevant. Do not recite this list back. '
+    + 'If the user says one is wrong or outdated, forget it with forget_memory (give its id) '
+    + 'and save the corrected fact.';
+}
+
+// Deletes one memory by list id ("m3"), by uid prefix, or by wording: exact
+// text, substring, or every long-ish word of the query appearing in the fact
+// (small models paraphrase). Ambiguous wording deletes nothing and answers
+// with the candidate ids so the model can retry precisely. Returns a message
+// for the model.
+export function forgetMemory(query) {
+  const q = String(query || '').toLowerCase().trim();
+  if (!q) return 'No memory identifier given.';
+
+  const refHit = lastRefs.find((r) => r.ref === q);
+  let hit = null;
+  if (refHit) {
+    hit = state.memory.find((m) => m.id === refHit.id) || null;
+  } else {
+    const uidHits = q.length >= 4
+      ? state.memory.filter((m) => String(m.id).toLowerCase().startsWith(q))
+      : [];
+    if (uidHits.length === 1) hit = uidHits[0];
+    if (!hit) {
+      let matches = state.memory.filter((m) => normText(m.text).includes(normText(q)));
+      if (!matches.length) {
+        const words = normText(q).split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+        if (words.length) matches = state.memory.filter((m) => words.every((w) => normText(m.text).includes(w)));
+      }
+      if (matches.length === 1) hit = matches[0];
+      if (matches.length > 1) {
+        const cands = matches.slice(0, 4).map((m) => {
+          const ref = lastRefs.find((r) => r.id === m.id);
+          return `${ref ? ref.ref + ': ' : ''}"${m.text.slice(0, 60)}"`;
+        });
+        return `Several memories match "${query}" — which one? ${cands.join(' | ')}. Call again with the exact id.`;
+      }
+    }
+  }
+  if (!hit) return `No stored memory matches "${query}". Use an id like m1 from the memory list.`;
+  deleteMemory(hit.id);
+  return `Forgot: ${hit.text}`;
 }
 
 // ---------- Fallback extractor (opt-in, for models without tools) ----------
