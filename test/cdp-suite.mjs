@@ -497,6 +497,27 @@ check('no usage or badge when the cache is off', await evalJs(`(() => {
 })()`));
 await evalJs(`Object.assign(__wc.state.settings, { promptCache: true }); __wc.saveSettings();`);
 
+// ---------- Section: upstream failure modes (the silent "stops after search") ----------
+// After a tool result the model sometimes emits an immediate stop with
+// neither text nor a tool call — the turn must nudge it once instead of
+// leaving a pill-only bubble where the answer silently vanished.
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('Please remember that the empty probe codeword is blue.')`, true);
+const nudged = await evalJs(`__wc.activeChat().messages.at(-1)`);
+check('empty answer after a tool call gets nudged into an answer',
+  /Recovered/i.test(nudged.content), JSON.stringify(nudged.content));
+check('tool step stays on a nudged turn',
+  (nudged.timeline || []).some((s) => s.kind === 'tool' && s.family === 'memory' && s.action === 'save'),
+  JSON.stringify((nudged.timeline || []).map((s) => s.kind + '/' + (s.action || ''))));
+// A model server that dies mid-generation must surface as a visible error —
+// never a silent stop, never an eternal spinner.
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('please die mid stream now')`, true);
+const died = await evalJs(`__wc.activeChat().messages.at(-1)`);
+check('mid-stream cut ends as an inline error',
+  died.role === 'error' && /unexpectedly|network|failed|stream/i.test(String(died.content)),
+  JSON.stringify(died).slice(0, 160));
+
 // ---------- Section: attachments (text documents + images) ----------
 await evalJs(`__wc.newChat()`);
 // A staged document shows a chip; the ✕ removes it and the same file can be

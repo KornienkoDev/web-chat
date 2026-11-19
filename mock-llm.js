@@ -23,6 +23,10 @@
 //     request's messages for that key and reports the shared message prefix
 //     as cached_tokens in a final usage chunk (when stream_options.include_usage
 //     is set) — "tokens" are words, only the ratios matter for the tests;
+//   * upstream failure modes: "empty probe" answers with an immediate stop
+//     right after a tool result (the client must nudge once to recover), and
+//     "die mid stream" drops the socket without finish_reason or [DONE]
+//     (the proxy and client must surface an error instead of going silent);
 //   * GET /mock/last returns the latest request's cache metadata (cache key,
 //     stream_options, roles, clock-at-end) for the suite to assert against.
 const http = require('node:http');
@@ -279,9 +283,34 @@ const server = http.createServer(async (req, res) => {
     // 2) The model's spoken reply after its tool calls ran; echo the tool
     // output so tests can prove results round-tripped through the executor.
     if (afterTool) {
+      // 2a) Empty-answer simulation for the nudge test: "empty probe" saves a
+      // fact (branch 1) and then EOSes with no text right after the tool
+      // result — just like a small model quitting after a long search dump.
+      // The client's nudge (a user message) then coaxes the recovery reply.
+      if (/no answer received/i.test(lastUser)) {
+        return streamText(res, id, 'Recovered: the probe is done and the answer is ready.',
+          undefined, '', usage);
+      }
+      if (msgs.some((x) => x.role === 'user' && /empty probe/i.test(flattenContent(x.content)))) {
+        return streamText(res, id, '', undefined, '', usage);
+      }
       const toolOut = msgs.filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' | ');
       return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)}) ${toolOut.slice(0, 120)}`,
         undefined, thinking ? think : '', usage);
+    }
+    // 2b) Mid-stream death: stream a few tokens, then drop the socket without
+    // finish_reason or [DONE] — the proxy must tear the browser response down
+    // and the client must surface an error instead of stopping silently.
+    if (/die mid stream/i.test(lastUser)) {
+      const w = safeWriter(res);
+      for (const word of 'Streaming normally until I die. '.match(/\S+\s*/g) || []) {
+        if (!w.live) break;
+        w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
+          choices: [{ index: 0, delta: { content: word }, finish_reason: null }] }));
+        await sleep(20);
+      }
+      res.destroy();
+      return;
     }
     // 3) Counting: a long, interruptible stream for the Stop button.
     let m;

@@ -115,4 +115,11 @@ Conventional-ish, lowercase, imperative, short: `feat: …`, `fix: …`, `style:
   cache for the whole conversation every turn. `msg.usage`
   (`{prompt, cached}` tokens, badge in `ui/messages.js`) is display-only and
   stripped in `stampHistory()` like the timeline.
+- Stream integrity: `llm.js` throws when an SSE stream ends without a
+  `finish_reason`/`[DONE]`, and `server.js` tears the browser response down
+  when the upstream errors mid-pipe — together they turn a model-server death
+  mid-generation into a visible inline error. `turn.js` additionally nudges
+  once (a transient user message in `apiMessages`, never saved to the chat)
+  when the model replies with nothing after a tool result. Keep all three —
+  removing any one reopens the "turn silently stops after a search" bug.
 - Mobile-first: inputs stay at 16 px (iOS zoom), touch targets ≥ 40 px, respect safe areas.

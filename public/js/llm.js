@@ -111,6 +111,13 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
   let text = '';
   let reasoning = '';
   let usage = null;
+  // Stream-completion flags: a well-formed OpenAI stream ends with a
+  // finish_reason and a trailing [DONE]. A model server that crashes or drops
+  // the connection mid-generation ends with neither — without tracking these
+  // the caller can't tell "finished cleanly" from "died silently", and an
+  // empty/garbled reply looks to the user like the model just quit.
+  let sawFinish = false;
+  let sawDone = false;
   const toolCalls = new Map(); // index -> {id, name, args}
   for (;;) {
     const { done, value } = await reader.read();
@@ -122,7 +129,7 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       buf = buf.slice(nl + 1);
       if (!line.startsWith('data:')) continue;
       const payload = line.slice(5).trim();
-      if (payload === '[DONE]') continue;
+      if (payload === '[DONE]') { sawDone = true; continue; }
       let obj;
       try { obj = JSON.parse(payload); } catch { continue; }
       if (obj.error) throw new Error(obj.error.message || 'LLM error');
@@ -130,7 +137,9 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       // read before the delta guard below drops it.
       const u = obj.usage ? readUsage(obj) : null;
       if (u) usage = u;
-      const delta = obj.choices?.[0]?.delta;
+      const choice = obj.choices?.[0];
+      if (choice?.finish_reason) sawFinish = true;
+      const delta = choice?.delta;
       if (!delta) continue;
       // Thinking tokens: llama.cpp/Qwen serve them as a separate delta field.
       if (delta.reasoning_content) {
@@ -148,6 +157,13 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
         toolCalls.set(i, tc);
       }
     }
+  }
+  // A stream that ended without [DONE] or a finish_reason was cut short by the
+  // upstream, not by the user pressing Stop (an intentional stop aborts the
+  // fetch and rejects inside read(), never reaching here). Surface it as an
+  // error so the turn shows what happened instead of a silent blank reply.
+  if (!sawDone && !sawFinish && !signal?.aborted) {
+    throw new Error('LLM stream ended unexpectedly — the model server closed the connection mid-reply. Try again.');
   }
   return { text, reasoning, toolCalls: [...toolCalls.values()].filter((t) => t.name), usage };
 }

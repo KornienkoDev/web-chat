@@ -163,6 +163,14 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
     onTimeline?.();
   };
 
+  // Small models sometimes emit an immediate EOS right after receiving tool
+  // results (long search dumps make it likelier): the round returns no text
+  // and no tool call, the turn would end with just the pills and the answer
+  // silently lost. Give the model one nudge out of that state — the nudge
+  // lives only in the transient apiMessages, so it never reaches the saved
+  // chat or the next turn's prompt.
+  let nudged = false;
+
   for (let round = 0; round < 6; round++) {
     const { text, toolCalls, usage } = await streamCompletion(
       apiMessages, onText, signal, { tools, onReasoning, cacheKey: cacheKeyFor(chat) });
@@ -178,7 +186,18 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
           : (prev.cached || 0) + (usage.cached || 0),
       };
     }
-    if (!toolCalls.length) return;
+    if (!toolCalls.length) {
+      // Empty reply on a round that followed tool results -> nudge once.
+      if (!text && round > 0 && !nudged) {
+        nudged = true;
+        apiMessages.push({
+          role: 'user',
+          content: '(no answer received - please answer now, using the tool results shown above.)',
+        });
+        continue;
+      }
+      return;
+    }
 
     const toolResults = [];
     const saved = [];

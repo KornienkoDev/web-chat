@@ -216,6 +216,11 @@ async function handleApiChat(req, res) {
     'Cache-Control': 'no-cache',
     'X-Accel-Buffering': 'no',
   });
+  // If the upstream dies mid-generation (model server crash, slot preempt —
+  // long search results make this likelier), pipe() silently stops feeding:
+  // without this the chunked response would never end and the browser would
+  // hang on a stream that can no longer produce tokens.
+  up.on('error', () => res.destroy());
   up.pipe(res);
   // Stop upstream generation when the browser aborts (Stop button / tab close).
   res.on('close', () => up.destroy());

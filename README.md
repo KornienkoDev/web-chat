@@ -70,7 +70,9 @@ field greys out while the toggle is on).
   search → reason → answer chain reads top-to-bottom instead of one merged
   blob. Pills carry a query preview, shimmer while a call runs, turn red if it
   fails, and stay with the message (the timeline is stripped from the history
-  sent back to the model).
+  sent back to the model). If the model falls silent right after a tool
+  result, the app nudges it once to answer; if the model server dies
+  mid-generation, the bubble shows an error instead of stopping in silence.
 - **Attachments: images + text documents** — a paperclip (or paste, or drag &
   drop) stages up to 6 files as removable chips above the composer. Images are
   downscaled to a JPEG (max side and file-size caps configurable in Settings)
