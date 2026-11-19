@@ -43,11 +43,11 @@ field greys out while the toggle is on).
   as a pill in the reply's process strip — and stay manageable in the panel
   (manual add, per-chat extraction, forget).
   Memories are persisted to a plain JSON file on the server (`memories.json`,
-  override with `WC_MEMORY_FILE`) and mirrored to `localStorage`, so they
-  survive clearing site data and can be edited or backed up by hand. A
+  override with `WC_MEMORY_FILE`) — that file is the **only** store: the
+  browser keeps no copy, so editing or backing it up by hand always wins. A
   **Save to file** button in the panel forces the full list to disk right away;
   if the server is unreachable it downloads a `memories.json` copy instead, so
-  the browser copy always reaches a real file. A fallback post-reply extractor
+  the in-session list always reaches a real file. A fallback post-reply extractor
   exists for models without tool support.
 - **Streaming** responses (SSE) with a Stop button that aborts upstream
   generation too.
@@ -143,10 +143,13 @@ LLM** toggle in Settings (the mock listens on `http://127.0.0.1:11435/v1`).
 ## Notes
 
 - Chats are stored per browser profile; use Export before clearing data.
-- Memories are stored both in `localStorage` and in **`memories.json`** next to
-  `server.js`. Point `WC_MEMORY_FILE=/path/to/file.json` at another location
-  (or a mounted volume) to keep them elsewhere. The file is plain JSON and can
-  be edited while the app is stopped; the Memory panel shows its full path.
+- Memories live **only** in **`memories.json`** next to `server.js` — the
+  browser keeps no copy, so clearing site data never touches them and the file
+  is the single source of truth (facts are unavailable only while the server
+  cannot serve it). Point `WC_MEMORY_FILE=/path/to/file.json` at another
+  location (or a mounted volume) to keep them elsewhere. The file is plain JSON
+  and can be edited while the app is stopped; the Memory panel shows its full
+  path.
 - The proxy rejects non-local targets, so the page can never be tricked into
   hitting arbitrary URLs.
 - **MCP:** `mcp.json` next to `server.js` declares stdio MCP servers

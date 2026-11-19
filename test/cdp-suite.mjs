@@ -131,7 +131,7 @@ check('memory tool use shown on timeline',
   Array.isArray(lastMsg.timeline)
   && lastMsg.timeline.filter((s) => s.kind === 'tool' && s.family === 'memory' && s.action === 'save').length >= 2,
   JSON.stringify((lastMsg.timeline || []).map((s) => s.kind + (s.action ? '/' + s.action : ''))));
-check('memory persisted', await evalJs(`JSON.parse(localStorage.getItem('wc.memory')||'[]').length >= 2`));
+check('memories stay out of localStorage', await evalJs(`!localStorage.getItem('wc.memory')`));
 await sleep(500); // let the debounced memory-file write (250ms) land before reading it back
 const memFile = await evalJs(`(async () => (await fetch('/api/memory')).json())()`, true);
 check('memory written to server file', Array.isArray(memFile.memory) && memFile.memory.length >= 2,

@@ -57,8 +57,8 @@ export function initMemoryPanel() {
         status.textContent = file ? `Saved ${label} to ${file}.` : `Saved ${label}.`;
         emit('toast', `Saved ${label} to file`);
       } else {
-        // Server file not writable (server not running?): land the browser
-        // copy on disk as a real file via download instead of losing it.
+        // Server file not writable: land the in-session list on disk as a real
+        // file via download instead of losing it.
         downloadMemories();
         const target = state.memoryFile || 'memories.json';
         status.textContent = `Server file not available (${error || 'unknown error'}) — downloaded ${label} as memories.json instead. To restore: replace ${target} with that file and reload the app.`;

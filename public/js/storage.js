@@ -8,7 +8,6 @@ import { emit } from './events.js';
 const LS_CHATS = 'wc.chats';
 const LS_ACTIVE = 'wc.active';
 const LS_SETTINGS = 'wc.settings';
-const LS_MEMORY = 'wc.memory';
 const LS_THEME = 'wc.theme';
 
 // ---------- Theme ----------
@@ -61,19 +60,19 @@ export function saveSettings() {
 }
 
 // ---------- Memory ----------
-// Memories are mirrored to localStorage and persisted to a JSON file by the
-// server (/api/memory). The file is the durable copy: it survives clearing
-// browser data and can be edited outside the app.
+// The server's JSON file (/api/memory → memories.json) is the ONLY source of
+// truth for memories: nothing is mirrored to localStorage, so no browser copy
+// can drift from the file or outlive an edit made outside the app.
+// state.memory is the working copy loaded at boot; every mutation PUTs the
+// full list back (debounced).
 const API_MEMORY = '/api/memory';
-const MEMORY_SYNC_CAP = 500;
-
-const memKey = (text) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+const MEMORY_FILE_CAP = 500; // mirrors the server's MEMORY_MAX_ITEMS
 
 function parseMemories(value) {
   const list = Array.isArray(value) ? value : value && Array.isArray(value.memory) ? value.memory : null;
   if (!list) return [];
   const out = [];
-  for (const m of list.slice(0, MEMORY_SYNC_CAP)) {
+  for (const m of list.slice(0, MEMORY_FILE_CAP)) {
     if (!m || typeof m.text !== 'string') continue;
     const text = m.text.replace(/\s+/g, ' ').trim();
     if (!text) continue;
@@ -87,46 +86,20 @@ function parseMemories(value) {
   return out;
 }
 
-function loadMemoryLocal() {
-  try {
-    const mem = JSON.parse(localStorage.getItem(LS_MEMORY) || '[]');
-    state.memory = parseMemories(mem);
-  } catch {
-    state.memory = [];
-  }
-}
-
-function mirrorMemory() {
-  try {
-    localStorage.setItem(LS_MEMORY, JSON.stringify(state.memory));
-  } catch {
-    emit('storage:warning', 'Browser storage is full — free some space to keep memories.');
-  }
-}
-
-// Loads the file copy from the server and merges it with the browser copy so
-// facts added while the server was unreachable are not lost.
+// Loads the memory list from the server file. On failure the list stays as it
+// is (empty at boot) and a warning explains why facts are missing — without
+// the file there is no other copy to fall back to, but chat itself still works.
 export async function loadMemory() {
-  loadMemoryLocal();
   try {
     const res = await fetch(API_MEMORY, { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const fromFile = parseMemories(data);
+    state.memory = parseMemories(data);
     state.memoryFile = typeof data.file === 'string' ? data.file : '';
-    if (fromFile.length) {
-      const seen = new Set(fromFile.map((m) => memKey(m.text)));
-      const extra = state.memory.filter((m) => !seen.has(memKey(m.text)));
-      state.memory = [...fromFile, ...extra].slice(0, MEMORY_SYNC_CAP);
-      mirrorMemory();
-    } else if (state.memory.length) {
-      // File is empty but the browser has facts: seed the file.
-      saveMemory();
-    }
-    emit('memory:changed');
   } catch {
-    // No server file (or opened without the server): keep the local copy.
+    emit('storage:warning', 'Could not read the memory file — saved facts are unavailable until the server can serve it.');
   }
+  emit('memory:changed');
 }
 
 // Debounced file writes: saving a memory should feel instant even though it
@@ -154,7 +127,7 @@ function writeMemoryFile() {
       return { ok: true };
     })
     .catch((e) => {
-      emit('storage:warning', 'Could not save memories to the server file — they are only in browser storage.');
+      emit('storage:warning', 'Could not save memories to the server file — they live only in this tab and are lost when it closes.');
       return { ok: false, error: e instanceof TypeError ? 'unreachable' : e.message };
     });
 }
@@ -175,7 +148,6 @@ function scheduleMemoryWrite() {
 }
 
 export function saveMemory() {
-  mirrorMemory();
   scheduleMemoryWrite();
 }
 
@@ -183,7 +155,6 @@ export function saveMemory() {
 // debounce, so the "Save to file" button can report a definite result.
 // Resolves { saved, error, count, file }; on failure `error` explains why.
 export async function saveMemoryNow() {
-  mirrorMemory();
   if (memWriteTimer) { clearTimeout(memWriteTimer); memWriteTimer = null; }
   memWritePending = true;
   flushMemoryFile();
