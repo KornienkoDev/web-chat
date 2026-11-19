@@ -1,6 +1,6 @@
 # Local Web Chat
 
-![Local Web Chat: a chat with a Markdown reply, a copyable code block and the composer's send key inside the field](docs/screenshot.png)
+![Local Web Chat: a chat with a Markdown reply, a copyable code block, per-message timestamps and the composer's paperclip and send key inside the field](docs/screenshot.png)
 
 A small, fast, self-hosted chat UI for a **locally served LLM**. No build step,
 no dependencies — just Node and a browser. The whole frontend runs on the
@@ -71,12 +71,15 @@ field greys out while the toggle is on).
   vision-capable models as OpenAI `image_url` parts; `.txt`/`.md`/code files are
   read as text and inlined into the prompt up to a configurable character cap,
   so even non-vision models can read
-  them. Thumbnails and expandable document previews stay in the message bubble,
-  and attachments persist in `localStorage` with the chats.
+  them. Thumbnails stay in proportion (several images lay side by side) and
+  documents get an expandable preview, all inside the message bubble;
+  attachments persist in `localStorage` with the chats.
 - **Mobile-first responsive UI** — drawer sidebar on phones, safe-area aware,
   16 px inputs (no iOS zoom), touch targets ≥ 40 px.
 - Markdown rendering (XSS-safe, own mini-renderer) with copy buttons on code
-  blocks, regenerate reply, per-message copy.
+  blocks, regenerate reply, per-message copy. Every bubble carries a quiet
+  send-time stamp — just the time today, `Nov 16, 13:34` this year, the year
+  added once it's older; hover for the full timestamp.
 - **Edit your message, re-grow the chat** — a pencil on any user message edits
   it in place; saving drops everything after it and the model answers anew, so
   the rest of the conversation re-grows from the corrected prompt.
