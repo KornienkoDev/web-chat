@@ -8,6 +8,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const MOCK_BASE = process.env.MOCK_BASE ?? 'http://127.0.0.1:11435/v1';
+const MOCK_ORIGIN = MOCK_BASE.replace(/\/v1\/?$/, '');
 const MEM_FILE = process.env.WC_TEST_MEM_FILE;
 if (!MEM_FILE) {
   console.error('WC_TEST_MEM_FILE is not set: this suite resets the memory file, so it must be ' +
@@ -448,6 +449,53 @@ check('new reply answers the edit',
   /edited probe one/i.test(await evalJs(`__wc.activeChat().messages[1].content`)));
 check('auto-title follows the edited first message',
   await evalJs(`__wc.activeChat().title`) === 'edited probe one');
+
+// ---------- Section: prompt cache (KV reuse) ----------
+// The mock simulates a llama.cpp-style prompt cache: same cache_key reuses
+// the shared message prefix. Checks stay inequality-based on purpose — the
+// trailing clock line's exact length must not matter.
+const mockLast = () => evalJs(
+  `(async () => (await fetch(${JSON.stringify(MOCK_ORIGIN + '/mock/last')})).json())()`, true);
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('cache probe one')`, true);
+const c1 = await mockLast();
+check('request carries a cache key and asks for usage',
+  !!c1?.cacheKey && c1.streamOptions?.include_usage === true, JSON.stringify(c1));
+check('volatile clock rides at the end of the prompt (stable prefix)',
+  c1?.roles?.at(-1) === 'system' && c1.clockAtEnd === true, JSON.stringify(c1?.roles || []));
+const c1Msg = await evalJs(`__wc.activeChat().messages.at(-1)`);
+check('first turn of a chat reports a cache miss',
+  c1Msg.usage?.prompt > 0 && c1Msg.usage?.cached === 0, JSON.stringify(c1Msg.usage));
+await evalJs(`__wc.sendMessage('cache probe two')`, true);
+const c2 = await mockLast();
+check('same chat keeps the same cache key',
+  !!c2?.cacheKey && c2.cacheKey === c1?.cacheKey,
+  `${c1?.cacheKey} vs ${c2?.cacheKey}`);
+const c2Msg = await evalJs(`__wc.activeChat().messages.at(-1)`);
+check('second turn reuses the cached prefix',
+  c2Msg.usage?.cached > 0 && c2Msg.usage?.cached < c2Msg.usage?.prompt,
+  JSON.stringify(c2Msg.usage));
+check('cache badge rendered on the reply', await evalJs(`(() => {
+  const el = [...document.querySelectorAll('.msg.assistant')].pop();
+  return /cached/.test(el.querySelector('.msg-usage')?.textContent || '');
+})()`));
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('cache probe other chat')`, true);
+const c3 = await mockLast();
+check('a different chat gets its own cache key',
+  !!c3?.cacheKey && c3.cacheKey !== c1?.cacheKey, `${c1?.cacheKey} vs ${c3?.cacheKey}`);
+// Upstreams that choke on unknown parameters can switch the whole thing off.
+await evalJs(`Object.assign(__wc.state.settings, { promptCache: false }); __wc.saveSettings();`);
+await evalJs(`__wc.sendMessage('cache probe off')`, true);
+const cOff = await mockLast();
+check('disabled setting omits cache_key and stream_options',
+  !cOff?.cacheKey && !cOff?.streamOptions, JSON.stringify(cOff));
+check('no usage or badge when the cache is off', await evalJs(`(() => {
+  const msg = __wc.activeChat().messages.at(-1);
+  const el = [...document.querySelectorAll('.msg.assistant')].pop();
+  return !msg.usage && !el.querySelector('.msg-usage');
+})()`));
+await evalJs(`Object.assign(__wc.state.settings, { promptCache: true }); __wc.saveSettings();`);
 
 // ---------- Section: attachments (text documents + images) ----------
 await evalJs(`__wc.newChat()`);

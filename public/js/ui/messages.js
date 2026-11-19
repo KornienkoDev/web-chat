@@ -88,6 +88,14 @@ function formatMsgTime(ms) {
   return `${d.toLocaleDateString([], opts)}, ${time}`;
 }
 
+// Prompt-cache report for a reply: how many prompt tokens the server reused
+// from the KV cache of this chat's previous turn. Rendered as plain text (the
+// icon font has no spare codepoints — see AGENTS.md); counts are k-formatted
+// so the meta row stays narrow on phones.
+function fmtTok(n) {
+  return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+}
+
 export function renderMessage(m, { md = false, canRegenerate = false, index = null } = {}) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}${md ? ' md' : ''}`;
@@ -109,6 +117,18 @@ export function renderMessage(m, { md = false, canRegenerate = false, index = nu
       time.textContent = formatMsgTime(m.ts);
       time.title = new Date(m.ts).toLocaleString();
       meta.appendChild(time);
+    }
+    // Cache badge: only for replies that actually ran through the cached path.
+    if (m.usage?.prompt) {
+      const usage = document.createElement('span');
+      usage.className = 'msg-usage';
+      usage.textContent = m.usage.cached == null
+        ? `${fmtTok(m.usage.prompt)} tok`
+        : `${fmtTok(m.usage.cached)}/${fmtTok(m.usage.prompt)} cached`;
+      usage.title = m.usage.cached == null
+        ? `${m.usage.prompt} prompt tokens sent`
+        : `${m.usage.cached} of ${m.usage.prompt} prompt tokens were reused from the server's KV cache`;
+      meta.appendChild(usage);
     }
     if (canRegenerate) {
       const regen = document.createElement('button');

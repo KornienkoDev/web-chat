@@ -51,6 +51,13 @@ field greys out while the toggle is on).
   exists for models without tool support.
 - **Streaming** responses (SSE) with a Stop button that aborts upstream
   generation too.
+- **Prompt caching** — every chat sends a stable per-chat `cache_key`
+  (llama.cpp-style KV cache reuse) and keeps its prompt token-stable up to the
+  newest message, so each turn only prefills what is new instead of
+  re-reading the whole conversation. A quiet `1.2k/3.4k cached` badge on each
+  reply shows how much the server reused; a Settings checkbox switches the
+  whole thing off for picky upstreams. (Servers that cache automatically,
+  like Ollama, profit from the stable prompt layout too.)
 - **MCP tools** — the model can search the web and read pages mid-conversation
   via [Model Context Protocol](https://modelcontextprotocol.io) servers: out of
   the box `ddg-search` (DuckDuckGo search/fetch, needs `uvx`). Servers are

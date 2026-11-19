@@ -279,6 +279,14 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   user-select: none;
   font-variant-numeric: tabular-nums;
 }
+/* Prompt-cache badge: same quiet look as the time stamp it sits beside. */
+.msg-usage {
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--text-dim);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Files a user message carries: image thumbnails in JS-built rows of two
    (ui/messages.js), documents as chips that expand to their text (a

@@ -18,11 +18,54 @@
 //     long enough stream to actually interrupt;
 //   * multimodal user messages (attachment parts) are flattened back to text,
 //     images become "[image]" markers, and the default echo counts them as
-//     "(saw N image(s))" so the attachment tests can prove they reached the API.
+//     "(saw N image(s))" so the attachment tests can prove they reached the API;
+//   * prompt caching: with a cache_key, the mock remembers the previous
+//     request's messages for that key and reports the shared message prefix
+//     as cached_tokens in a final usage chunk (when stream_options.include_usage
+//     is set) — "tokens" are words, only the ratios matter for the tests;
+//   * GET /mock/last returns the latest request's cache metadata (cache key,
+//     stream_options, roles, clock-at-end) for the suite to assert against.
 const http = require('node:http');
 
 const PORT = Number(process.env.PORT || 11435);
 let reqId = 0;
+
+// Per-cache_key prompt-cache emulation: the messages of the last request seen
+// for a key, and a small log for the /mock/last introspection endpoint.
+const lastMsgsByKey = new Map();
+const reqLog = [];
+
+function usageChunk(id, body, msgs) {
+  if (!body.stream_options?.include_usage) return null;
+  const key = typeof body.cache_key === 'string' ? body.cache_key : '';
+  const prev = key ? lastMsgsByKey.get(key) : undefined;
+  if (key) lastMsgsByKey.set(key, msgs);
+  const prompt = promptTokens(msgs);
+  const cached = prev ? sharedPrefixWords(prev, msgs) : 0;
+  return { id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
+    choices: [], usage: {
+      prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt,
+      prompt_tokens_details: { cached_tokens: cached },
+    } };
+}
+
+const wc = (s) => (s.match(/\S+/g) || []).length;
+
+// Word counts over the message contents stand in for tokens.
+function promptTokens(msgs) {
+  return msgs.reduce((n, m) => n + wc(flattenContent(m.content)), 0);
+}
+
+// Words covered by the longest shared message-array prefix — the part a real
+// KV cache would reuse without re-prefilling.
+function sharedPrefixWords(prevMsgs, msgs) {
+  let n = 0;
+  for (let i = 0; i < Math.min(prevMsgs.length, msgs.length); i++) {
+    if (JSON.stringify(prevMsgs[i]) !== JSON.stringify(msgs[i])) break;
+    n += wc(flattenContent(msgs[i].content));
+  }
+  return n;
+}
 
 const chunk = (obj) => `data: ${JSON.stringify(obj)}\n\n`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -39,7 +82,15 @@ function safeWriter(res) {
   };
 }
 
-async function streamText(res, id, text, delay = 15, reasoning = '') {
+// Appends the usage chunk a server emits after the last token when the client
+// asked for it; `words` is the streamed output length so completion totals add up.
+function writeUsage(w, u, words) {
+  if (!u) return;
+  const usage = { ...u.usage, completion_tokens: words, total_tokens: u.usage.prompt_tokens + words };
+  w.write(chunk({ ...u, usage }));
+}
+
+async function streamText(res, id, text, delay = 15, reasoning = '', usage = null) {
   const w = safeWriter(res);
   for (const word of reasoning.match(/\S+\s*/g) || []) {
     if (!w.live) break;
@@ -55,13 +106,14 @@ async function streamText(res, id, text, delay = 15, reasoning = '') {
   }
   w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
     choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
+  writeUsage(w, usage, wc(reasoning) + wc(text));
   w.write('data: [DONE]\n\n');
   if (w.live) res.end();
 }
 
 // Streams the requested range one number per line, slowly enough (~12ms each)
 // that the suite can interrupt mid-count and still have plenty of partial text.
-async function streamCount(res, id, start, end, delay = 12) {
+async function streamCount(res, id, start, end, delay = 12, usage = null) {
   const w = safeWriter(res);
   for (let n = start; n <= end && w.live; n++) {
     w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
@@ -70,6 +122,7 @@ async function streamCount(res, id, start, end, delay = 12) {
   }
   w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
     choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }));
+  writeUsage(w, usage, end - start + 1);
   w.write('data: [DONE]\n\n');
   if (w.live) res.end();
 }
@@ -77,15 +130,17 @@ async function streamCount(res, id, start, end, delay = 12) {
 // Emits one save_memory tool call per fact, each with its own index so the
 // client's per-index assembler collects them all, and streams the JSON args in
 // small pieces to mimic how a real model dribbles tool arguments over SSE.
-function streamToolCalls(res, id, facts) {
+function streamToolCalls(res, id, facts, usage = null) {
   const w = safeWriter(res);
   const mk = (delta, finish = null) =>
     w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
       choices: [{ index: 0, delta, finish_reason: finish }] }));
   mk({ role: 'assistant' });
+  let argWords = 0;
   facts.forEach((fact, i) => {
     if (!w.live) return;
     const args = JSON.stringify({ fact });
+    argWords += wc(args);
     mk({ tool_calls: [{ index: i, id: `call_mock_${i + 1}`, type: 'function',
       function: { name: 'save_memory', arguments: '' } }] });
     for (let p = 0; p < args.length; p += 7) {
@@ -93,13 +148,14 @@ function streamToolCalls(res, id, facts) {
     }
   });
   mk({}, 'tool_calls');
+  writeUsage(w, usage, argWords);
   w.write('data: [DONE]\n\n');
   if (w.live) res.end();
 }
 
 // Emits a single tool call with streamed JSON args, used for the search
 // emulation below.
-function streamOneToolCall(res, id, name, argsObj) {
+function streamOneToolCall(res, id, name, argsObj, usage = null) {
   const w = safeWriter(res);
   const mk = (delta, finish = null) =>
     w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
@@ -112,6 +168,7 @@ function streamOneToolCall(res, id, name, argsObj) {
     mk({ tool_calls: [{ index: 0, function: { arguments: args.slice(p, p + 7) } }] });
   }
   mk({}, 'tool_calls');
+  writeUsage(w, usage, wc(args));
   w.write('data: [DONE]\n\n');
   if (w.live) res.end();
 }
@@ -179,6 +236,20 @@ const server = http.createServer(async (req, res) => {
     const lastUser = flattenContent([...msgs].reverse().find((m) => m.role === 'user')?.content);
     const afterTool = msgs.some((m) => m.role === 'tool');
     const id = `chatcmpl-mock-${++reqId}`;
+
+    // Prompt-cache bookkeeping (see header): compute the usage chunk once per
+    // request — it also records the message array as the next request's
+    // prefix baseline — and log the cache metadata for /mock/last.
+    const usage = usageChunk(id, body, msgs);
+    reqLog.push({
+      n: reqLog.length,
+      cacheKey: (typeof body.cache_key === 'string' && body.cache_key) || null,
+      streamOptions: body.stream_options || null,
+      roles: msgs.map((msg) => msg.role),
+      clockAtEnd: msgs.at(-1)?.role === 'system'
+        && /current date and time/i.test(flattenContent(msgs.at(-1)?.content)),
+    });
+
     // With thinking enabled the mock first streams a fake chain of thought as
     // reasoning_content deltas, like llama.cpp does for Qwen-style models.
     const thinking = body.chat_template_kwargs?.enable_thinking === true;
@@ -191,37 +262,38 @@ const server = http.createServer(async (req, res) => {
     const searchTool = (body.tools || []).find((t) => t.function?.name?.endsWith('__search'));
     let sm;
     if (searchTool && !afterTool && (sm = lastUser.match(/search for (.+)/i))) {
-      return streamOneToolCall(res, id, searchTool.function.name, { query: sm[1].trim() });
+      return streamOneToolCall(res, id, searchTool.function.name, { query: sm[1].trim() }, usage);
     }
     // 0b) forget_memory emulation: any "forget that X" ask names the fact to
     // drop; the real client resolves the wording against the live list.
     const forgetTool = (body.tools || []).find((t) => t.function?.name === 'forget_memory');
     let fm;
     if (forgetTool && !afterTool && (fm = lastUser.match(/(?:forget|delete the memory about|remove the memory about)\s+(?:that\s+)?(.+)/i))) {
-      return streamOneToolCall(res, id, 'forget_memory', { memory_id_or_text: fm[1].trim() });
+      return streamOneToolCall(res, id, 'forget_memory', { memory_id_or_text: fm[1].trim() }, usage);
     }
     // 1) Memory tool: save each durable fact, one tool call each.
     const facts = extractFacts(lastUser);
     if (body.tools?.length && !afterTool && facts.length) {
-      return streamToolCalls(res, id, facts);
+      return streamToolCalls(res, id, facts, usage);
     }
     // 2) The model's spoken reply after its tool calls ran; echo the tool
     // output so tests can prove results round-tripped through the executor.
     if (afterTool) {
       const toolOut = msgs.filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' | ');
-      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)}) ${toolOut.slice(0, 120)}`, undefined, thinking ? think : '');
+      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)}) ${toolOut.slice(0, 120)}`,
+        undefined, thinking ? think : '', usage);
     }
     // 3) Counting: a long, interruptible stream for the Stop button.
     let m;
     if ((m = lastUser.match(/count\s+from\s+(\d+)\s+to\s+(\d+)/i))) {
-      return streamCount(res, id, Number(m[1]), Number(m[2]));
+      return streamCount(res, id, Number(m[1]), Number(m[2]), 12, usage);
     }
     if ((m = lastUser.match(/count\s+to\s+(\d+)/i))) {
-      return streamCount(res, id, 1, Number(m[1]));
+      return streamCount(res, id, 1, Number(m[1]), 12, usage);
     }
     // 4) Markdown demo.
     if (/\b(markdown|code block)\b/i.test(lastUser) || /\blist of\b.*\b(fruit|fruits)\b/i.test(lastUser)) {
-      return streamText(res, id, MARKDOWN_REPLY, undefined, thinking ? think : '');
+      return streamText(res, id, MARKDOWN_REPLY, undefined, thinking ? think : '', usage);
     }
     // 5) Default echo; surface the injected memory so recall is observable,
     // and count any [image] markers so attachment tests can prove the vision
@@ -230,7 +302,15 @@ const server = http.createServer(async (req, res) => {
     const memory = known.length ? `  (I remember: ${known.slice(0, 3).join('; ')})` : '';
     const imgs = (lastUser.match(/\[image\]/g) || []).length;
     const vision = imgs ? `  (saw ${imgs} image${imgs > 1 ? 's' : ''})` : '';
-    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}${vision}`, undefined, thinking ? think : '');
+    return streamText(res, id, `Mock echo: ${lastUser.slice(0, 120)}${memory}${vision}`,
+      undefined, thinking ? think : '', usage);
+  }
+
+  // Introspection for the e2e suite: what the latest chat request looked like.
+  // CORS-open so the page (different origin) can fetch it via window eval.
+  if (req.method === 'GET' && url.pathname === '/mock/last') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    return res.end(JSON.stringify(reqLog.at(-1) || null));
   }
 
   res.writeHead(404, { 'Content-Type': 'application/json' });

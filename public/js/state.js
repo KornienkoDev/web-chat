@@ -19,6 +19,10 @@ export const DEFAULT_SETTINGS = {
   autoExtract: false, // fallback learner for models without tool support
   mcpDisabled: '', // comma-separated MCP server names unchecked in Settings
   mock: false, // pin all requests to MOCK_BASE_URL; the real baseUrl stays saved
+  // Send a stable per-chat cache_key so llama.cpp-style servers can reuse the
+  // KV cache across turns instead of re-prefilling the whole conversation.
+  // Only worth switching off for upstreams that choke on unknown parameters.
+  promptCache: true,
 };
 
 export const state = {

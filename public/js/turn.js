@@ -3,7 +3,7 @@
 // model calls save_memory, execute it locally and feed the result back.
 import { state } from './state.js';
 import { saveChats } from './storage.js';
-import { streamCompletion, callMcpTool } from './llm.js';
+import { streamCompletion, callMcpTool, currentModel } from './llm.js';
 import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE, FORGET_TOOL, forgetMemory } from './memory.js';
 import { documentPartText } from './attachments.js';
 
@@ -37,9 +37,10 @@ function stampHistory(msgs) {
   let prev = null;
   return msgs.map((m) => {
     // Upstream APIs may reject unknown fields like ts and reasoning (thinking,
-    // saved facts and the tool-usage timeline are display-only history; models
-    // do not expect their own past reasoning or tool-use notes echoed back).
-    const { ts, reasoning, savedFacts, mcpUsed, timeline, attachments, ...clean } = m;
+    // saved facts, the tool-usage timeline and the prompt-cache badge are
+    // display-only history; models do not expect their own past reasoning or
+    // tool-use notes echoed back).
+    const { ts, reasoning, savedFacts, mcpUsed, timeline, attachments, usage, ...clean } = m;
     let tag = '';
     if (ts) {
       tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
@@ -110,14 +111,30 @@ export function buildApiMessages(chat) {
   if (mem) sysParts.push(mem);
   sysParts.push(MEMORY_TOOL_GUIDANCE);
   if (state.mcpTools.length) sysParts.push(MCP_TOOL_GUIDANCE);
-  sysParts.push('The current date and time is ' + formatTs(Date.now()) +
-    '. Chat messages are tagged [sent-at (+gap since the previous message)], so you can ' +
+  sysParts.push('Chat messages are tagged [sent-at (+gap since the previous message)], so you can ' +
     'tell how much time passed between turns; take that into account when relevant. ' +
     'Never repeat these tags back to the user.');
   msgs.push({ role: 'system', content: sysParts.join('\n\n') });
   const recent = chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx);
   msgs.push(...stampHistory(recent));
+  // The clock rides in a trailing system message, NOT inside the leading one:
+  // prompt caches only reuse KV state up to the first changed token, so a
+  // time string in the system prompt would invalidate everything behind it —
+  // the whole conversation — on every single turn. Kept at the end, only this
+  // one line re-prefills; everything before it stays byte-stable across turns.
+  msgs.push({ role: 'system', content: 'The current date and time is ' + formatTs(Date.now()) + '.' });
   return msgs;
+}
+
+// Prompt-cache affinity key: stable for one chat on one model, so a llama.cpp
+// style server pins the chat to one KV-cache slot and reuses the prefix every
+// turn. The model is part of the key because KV state is model-specific — on
+// a model switch the old slot is useless, so start a fresh one instead of
+// polluting it. chat.id is a random uid; the slug keeps the whole key
+// lowercase-alphanumeric so any server accepts it.
+function cacheKeyFor(chat) {
+  const slug = currentModel().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return `wc1-${chat.id}${slug ? '-' + slug : ''}`;
 }
 
 // One user turn: keep calling the model while it invokes tools (save_memory,
@@ -147,8 +164,20 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
   };
 
   for (let round = 0; round < 6; round++) {
-    const { text, toolCalls } = await streamCompletion(
-      apiMessages, onText, signal, { tools, onReasoning });
+    const { text, toolCalls, usage } = await streamCompletion(
+      apiMessages, onText, signal, { tools, onReasoning, cacheKey: cacheKeyFor(chat) });
+    // Prompt-cache report for the badge: across tool rounds the total is the
+    // work done and `cached` the part the server reused; a server that does
+    // not report the hit keeps `cached` null (badge then shows tokens only).
+    if (usage) {
+      const prev = asst.usage || { prompt: 0, cached: null };
+      asst.usage = {
+        prompt: prev.prompt + usage.prompt,
+        cached: usage.cached == null && prev.cached == null
+          ? null
+          : (prev.cached || 0) + (usage.cached || 0),
+      };
+    }
     if (!toolCalls.length) return;
 
     const toolResults = [];

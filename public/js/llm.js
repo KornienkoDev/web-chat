@@ -68,23 +68,34 @@ export async function callMcpTool(name, args) {
   return String(data.content || '');
 }
 
-// Streams one completion; resolves to { text, reasoning, toolCalls: [{id, name, args}] }.
+// Streams one completion; resolves to { text, reasoning, toolCalls: [{id, name, args}],
+// usage: {prompt, cached} | null }.
 // `opts` overrides request fields: temperature, max_tokens, thinking, tools,
+// cacheKey (per-chat prompt-cache affinity key),
 // onReasoning (live callback for the model's thinking tokens).
 export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) {
+  const body = {
+    base: effectiveBaseUrl(),
+    apiKey: state.settings.apiKey,
+    model: currentModel(),
+    temperature: opts.temperature ?? state.settings.temperature,
+    max_tokens: opts.max_tokens ?? state.settings.maxTokens,
+    thinking: opts.thinking ?? state.settings.thinking,
+    messages: apiMessages,
+    tools: opts.tools,
+  };
+  // cache_key gives every chat a stable KV-cache slot on llama.cpp-style
+  // servers, so each turn re-prefills only the new tail instead of the whole
+  // conversation; include_usage makes the server report the hit size in a
+  // final SSE chunk. Both are dropped when the Settings toggle is off.
+  if (opts.cacheKey && state.settings.promptCache !== false) {
+    body.cache_key = opts.cacheKey;
+    body.stream_options = { include_usage: true };
+  }
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      base: effectiveBaseUrl(),
-      apiKey: state.settings.apiKey,
-      model: currentModel(),
-      temperature: opts.temperature ?? state.settings.temperature,
-      max_tokens: opts.max_tokens ?? state.settings.maxTokens,
-      thinking: opts.thinking ?? state.settings.thinking,
-      messages: apiMessages,
-      tools: opts.tools,
-    }),
+    body: JSON.stringify(body),
     signal,
   });
   if (!res.ok || !res.body) {
@@ -99,6 +110,7 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
   let buf = '';
   let text = '';
   let reasoning = '';
+  let usage = null;
   const toolCalls = new Map(); // index -> {id, name, args}
   for (;;) {
     const { done, value } = await reader.read();
@@ -114,6 +126,10 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       let obj;
       try { obj = JSON.parse(payload); } catch { continue; }
       if (obj.error) throw new Error(obj.error.message || 'LLM error');
+      // The usage chunk carries no delta (choices is empty), so it must be
+      // read before the delta guard below drops it.
+      const u = obj.usage ? readUsage(obj) : null;
+      if (u) usage = u;
       const delta = obj.choices?.[0]?.delta;
       if (!delta) continue;
       // Thinking tokens: llama.cpp/Qwen serve them as a separate delta field.
@@ -133,5 +149,19 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
       }
     }
   }
-  return { text, reasoning, toolCalls: [...toolCalls.values()].filter((t) => t.name) };
+  return { text, reasoning, toolCalls: [...toolCalls.values()].filter((t) => t.name), usage };
+}
+
+// Normalizes the token bookkeeping of a final usage chunk into
+// { prompt, cached }. OpenAI-style servers put the cache hit in
+// usage.prompt_tokens_details.cached_tokens; llama.cpp reports it as
+// timings.cache_n. `cached` stays null when the server does not say.
+function readUsage(obj) {
+  const prompt = Number(obj.usage?.prompt_tokens);
+  if (!Number.isFinite(prompt)) return null;
+  const raw = obj.usage?.prompt_tokens_details?.cached_tokens
+    ?? obj.usage?.prompt_cached_tokens
+    ?? obj.timings?.cache_n;
+  const cached = Number(raw);
+  return { prompt, cached: Number.isFinite(cached) ? cached : null };
 }

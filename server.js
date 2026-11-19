@@ -179,6 +179,14 @@ async function handleApiChat(req, res) {
     payloadObj.tools = body.tools;
     if (body.tool_choice) payloadObj.tool_choice = body.tool_choice;
   }
+  // Prompt-cache affinity passthrough: cache_key is llama.cpp's per-slot KV
+  // reuse key (upstreams that do not know it ignore the field); stream_options
+  // asks the server to append a final usage chunk reporting the cache hit.
+  // Both ride only when the client asked (snake_case fields, like max_tokens).
+  if (typeof body.cache_key === 'string' && body.cache_key) {
+    payloadObj.cache_key = body.cache_key.slice(0, 128);
+  }
+  if (body.stream_options?.include_usage) payloadObj.stream_options = { include_usage: true };
   const payload = Buffer.from(JSON.stringify(payloadObj));
 
   const headers = {

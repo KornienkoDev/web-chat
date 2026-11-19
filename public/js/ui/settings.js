@@ -79,6 +79,7 @@ function readForm() {
     contextMessages: $('setContext').value.trim(),
     system: $('setSystem').value,
     thinking: $('setThinking').value,
+    promptCache: $('setPromptCache').checked,
     attachTextChars: $('setAttachTextChars').value.trim(),
     attachImageSide: $('setAttachImageSide').value.trim(),
     attachImageMb: $('setAttachImageMb').value.trim(),
@@ -121,6 +122,7 @@ function fillForm() {
   $('setContext').value = s.contextMessages;
   $('setSystem').value = s.system;
   $('setThinking').value = s.thinking;
+  $('setPromptCache').checked = s.promptCache !== false;
   $('setAttachTextChars').value = s.attachTextChars;
   $('setAttachImageSide').value = s.attachImageSide;
   $('setAttachImageMb').value = s.attachImageMb;

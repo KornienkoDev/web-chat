@@ -106,4 +106,13 @@ Conventional-ish, lowercase, imperative, short: `feat: …`, `fix: …`, `style:
 - The per-message timeline (`msg.timeline`: think/tool steps) is stripped from the
   history sent back to the model — keep renderer (`ui/timeline.js`) and
   `turn.js` prompt assembly in sync when extending it.
+- Prompt cache: requests carry a per-chat+model `cache_key` (built in
+  `turn.js`, forwarded by the `/api/chat` proxy) so llama.cpp-style servers
+  pin a chat to a KV-cache slot. Everything before the newest message must
+  stay token-stable across turns — notably the volatile "current date and
+  time" line rides in a **trailing** system message (`buildApiMessages`);
+  moving it back into the leading system prompt silently invalidates the
+  cache for the whole conversation every turn. `msg.usage`
+  (`{prompt, cached}` tokens, badge in `ui/messages.js`) is display-only and
+  stripped in `stampHistory()` like the timeline.
 - Mobile-first: inputs stay at 16 px (iOS zoom), touch targets ≥ 40 px, respect safe areas.
