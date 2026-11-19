@@ -132,6 +132,12 @@ base URL** at `http://127.0.0.1:11435/v1`.
   an empty `mcpServers` disables the feature. The shipped `ddg-search` entry
   runs `uvx duckduckgo-mcp-server` (install [uv](https://docs.astral.sh/uv/)
   for it), which gives the model `search`, `fetch_content` and `expand_link`.
+  Its `PYTHONWARNINGS=ignore::UserWarning` hides the MCP SDK's
+  `MCPDeprecationWarning` (the SDK deprecates `ctx.info`, so every search logs
+  one). Keep a **builtin** category there: a dotted path such as
+  `mcp.shared.exceptions.MCPDeprecationWarning` is not importable when the
+  interpreter starts, so CPython drops the filter and prints
+  `Invalid -W option ignored` instead.
   Settings → **MCP servers** lists every configured server with its tools;
   uncheck one and save to stop offering its tools (it is not even started).
   Whatever the model searches is visible in the conversation. Treat `mcp.json`
