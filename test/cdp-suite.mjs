@@ -192,20 +192,35 @@ check('first message docks composer to bottom', await evalJs(`(() => {
   return !main.classList.contains('empty') && Math.abs(box.bottom - innerHeight) < 2;
 })()`));
 // No control column beside the field: the send key sits inside it, and the
-// textarea shows no scrollbar (its height fits the text exactly).
+// textarea shows no scrollbar (its height fits the text exactly). Both floating
+// keys must also sit on the field's own middle — they centre on .composer-box,
+// which only matches the field while the textarea is a block (an inline-block
+// leaves a descender under it and drops the keys ~2.5px).
 const field = await evalJs(`(async () => {
   const i = document.querySelector('#input');
+  const send = document.querySelector('#btnSend');
+  const clip = document.querySelector('#btnAttach');
+  const off = (el) => {
+    const k = el.getBoundingClientRect(), f = i.getBoundingClientRect();
+    return +(k.y + k.height / 2 - (f.y + f.height / 2)).toFixed(1);
+  };
+  const keys = () => ({ send: off(send), clip: off(clip) });
   const r = i.getBoundingClientRect();
-  const b = document.querySelector('#btnSend').getBoundingClientRect();
+  const b = send.getBoundingClientRect();
+  const atRest = keys();
   i.value = Array(6).fill('a line').join('\\n');
   i.dispatchEvent(new Event('input'));
   await new Promise((res) => setTimeout(res, 250)); // let the height transition settle
   const fits = i.scrollHeight <= i.clientHeight + 1;
+  const grown = keys();
   i.value = ''; i.dispatchEvent(new Event('input'));
   return { inside: b.left > r.left && b.right <= r.right && b.bottom <= r.bottom,
-           noBar: getComputedStyle(i).scrollbarWidth === 'none', fits };
+           noBar: getComputedStyle(i).scrollbarWidth === 'none', fits, atRest, grown };
 })()`, true);
 check('send key inside the field, scrollbar gone', field.inside && field.noBar && field.fits, JSON.stringify(field));
+const centredKeys = [field.atRest, field.grown].every((k) => Math.abs(k.send) <= 1 && Math.abs(k.clip) <= 1);
+check('floating keys centred on the field, at rest and grown', centredKeys,
+  JSON.stringify({ atRest: field.atRest, grown: field.grown }));
 await reload();
 check('two chats persisted', await evalJs(`__wc.state.chats.size`) === 2);
 const olderId = await evalJs(`[...__wc.state.chats.values()].sort((a,b)=>a.updatedAt-b.updatedAt)[0].id`);

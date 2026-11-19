@@ -519,6 +519,11 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 
 #input {
+  /* Must be block: as an inline-block the textarea sits on the box's text
+     baseline, so .composer-box grows a descender (~5px) below it. The floating
+     keys centre on the box (top:50%), which put them ~2.5px under the field's
+     real middle. */
+  display: block;
   width: 100%;
   resize: none;
   max-height: 40dvh;
@@ -688,8 +693,12 @@ html.dark #btnTheme .ic-sun { display: none; }
 /* The paper plane's bounding box centres fine, but its ink mass sits ~2.4px
    left of that centre (tip reaches right, mass hugs the left), so flex has it
    feeling lopsided. Measured in the rendered glyph at 18px; 2.5px right puts
-   the optical centre on the button's. */
-.send-btn::before { content: "\f048a"; transform: translateX(2.5px); } /* md-send */
+   the optical centre on the button's. Vertically the ink is dead centred (its
+   bbox and its area centroid both land on the line-box centre — the subset
+   normalises every glyph that way), but the silhouette is not: a long diagonal
+   edge runs down to the nose and the notch is cut below the midline, so the
+   plane reads as sitting high in the badge. 1px down is the perceptual fix. */
+.send-btn::before { content: "\f048a"; transform: translate(2.5px, 1px); } /* md-send */
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 /* the send key's stop role while a reply streams */
 .send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
