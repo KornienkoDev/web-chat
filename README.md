@@ -86,13 +86,17 @@ mock-llm.js            OpenAI-compatible fake server for testing without a GPU
 # 1) mock LLM smoke test (no browser):
 bash test/smoke-mock.sh
 
-# 2) full browser suite (needs Chromium + app + mock LLM):
-chromium --headless=new --no-sandbox --remote-debugging-port=9222 about:blank &
-./start.sh --mock &            # app on :3000 and the mock LLM on :11435
-node test/cdp-suite.mjs        # CDP_URL / APP_URL / MOCK_BASE env vars supported
+# 2) full browser suite (needs Chromium; reuses a CDP browser if one is up):
+./test/run.sh                              # app :3000, mock LLM :11435
+APP_PORT=3100 MOCK_PORT=11436 ./test/run.sh   # free ports while a dev instance runs
 ```
 
-The suite drives **only** the mock LLM, so it is deterministic and needs no GPU.
+`test/run.sh` owns the server it tests: it refuses to start if the app or mock
+port already answers, because the suite wipes the server's memory file as its
+first step. That memory always goes to a throwaway temp file — and the suite
+itself refuses to run unless the runner hands it `WC_TEST_MEM_FILE` and the app
+confirms it writes exactly that file. It drives **only** the mock LLM, so it is
+deterministic and needs no GPU.
 To try the same flow by hand, run `./start.sh --mock` and point **Settings → API
 base URL** at `http://127.0.0.1:11435/v1`.
 
