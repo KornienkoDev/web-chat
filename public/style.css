@@ -416,6 +416,10 @@ html.dark #btnTheme .i-moon { display: none; }
   font-size: 13.5px;
 }
 .mem-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* The chat list reveals a row's actions on hover; a memory row has no such
+   affordance, so the forget cross has to stay visible. Without this the shared
+   .chat-item-btn stays hidden by its base rule and the fact cannot be deleted. */
+.mem-item .chat-item-btn { visibility: visible; }
 .mem-tag {
   flex: none;
   font-size: 10.5px;
