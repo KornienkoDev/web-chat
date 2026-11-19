@@ -6,6 +6,7 @@ import { activeChat } from '../chats.js';
 import { addMemory, deleteMemory, clearMemory, extractFacts } from '../memory.js';
 import { on, emit } from '../events.js';
 import { $ } from './dom.js';
+import { confirmDialog } from './modal.js';
 
 export function initMemoryPanel() {
   const dialog = $('memoryDialog');
@@ -33,8 +34,15 @@ export function initMemoryPanel() {
       status.textContent = `Extraction failed: ${e.message}`;
     }
   });
-  $('btnMemClear').addEventListener('click', () => {
-    if (state.memory.length && confirm('Forget all saved memories?')) clearMemory();
+  $('btnMemClear').addEventListener('click', async () => {
+    const n = state.memory.length;
+    if (!n) return;
+    const ok = await confirmDialog({
+      title: 'Forget all memories?',
+      message: `All ${n} saved ${n === 1 ? 'fact is' : 'facts are'} dropped from the model's context and from the saved file. This cannot be undone.`,
+      confirmLabel: 'Forget all',
+    });
+    if (ok) clearMemory();
   });
   $('btnMemSave').addEventListener('click', async () => {
     const btn = $('btnMemSave');
@@ -94,7 +102,14 @@ function renderMemory() {
     del.className = 'chat-item-btn chat-item-del';
     del.textContent = '\u2715';
     del.title = 'Forget';
-    del.addEventListener('click', () => deleteMemory(m.id));
+    del.addEventListener('click', async () => {
+      const ok = await confirmDialog({
+        title: 'Forget this memory?',
+        message: m.text,
+        confirmLabel: 'Forget',
+      });
+      if (ok) deleteMemory(m.id); // by id: this row is re-rendered while asking
+    });
     item.append(text, tag, del);
     list.appendChild(item);
   }

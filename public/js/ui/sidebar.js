@@ -3,8 +3,10 @@ import { state } from '../state.js';
 import { openChat, renameChat, deleteChat, newChat } from '../chats.js';
 import { on } from '../events.js';
 import { $ } from './dom.js';
+import { confirmDialog } from './modal.js';
 
 let sidebarEl, backdropEl, chatListEl, chatSearchEl;
+let renaming = null; // { cancel() } for the row whose title is being edited
 
 export function initSidebar() {
   sidebarEl = $('sidebar');
@@ -51,6 +53,10 @@ export function renderChatList() {
     .filter((c) => !q || chatMatches(c, q))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
+  // The list is about to be rebuilt, which would drop an open inline editor and
+  // its listeners without a blur — close it first so no stale state is left.
+  if (renaming) renaming.cancel();
+
   chatListEl.innerHTML = '';
   for (const c of chats) {
     const item = document.createElement('div');
@@ -70,22 +76,73 @@ export function renderChatList() {
     btnRename.title = 'Rename';
     btnRename.addEventListener('click', (e) => {
       e.stopPropagation();
-      const t = prompt('Rename chat', c.title);
-      if (t && t.trim()) renameChat(c.id, t);
+      startRename(item, c);
     });
 
     const btnDel = document.createElement('button');
     btnDel.className = 'chat-item-btn chat-item-del';
     btnDel.textContent = '\u2715'; // cross
     btnDel.title = 'Delete';
-    btnDel.addEventListener('click', (e) => {
+    btnDel.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (confirm(`Delete "${c.title}"?`)) deleteChat(c.id);
+      const ok = await confirmDialog({
+        title: 'Delete this chat?',
+        message: `“${c.title || 'Untitled'}” and its ${c.messages.length} message${c.messages.length === 1 ? '' : 's'} will be gone for good.`,
+        confirmLabel: 'Delete',
+      });
+      if (ok) deleteChat(c.id);
     });
 
     item.append(main, btnRename, btnDel);
     chatListEl.appendChild(item);
   }
+}
+
+// Rename in place: the title is swapped for an input holding the current name,
+// so the user never leaves the list for a browser prompt. Enter or a click away
+// commits, Escape reverts, an empty name keeps the old one.
+function startRename(item, chat) {
+  if (renaming) renaming.cancel(); // a second pencil moves the editor to this row
+  const main = item.querySelector('.chat-item-main');
+  const titleEl = main.querySelector('.chat-item-title');
+  const previous = chat.title || '';
+
+  const input = document.createElement('input');
+  input.className = 'chat-item-input';
+  input.value = previous;
+  input.maxLength = 80; // matches the cap in chats.js renameChat
+  input.setAttribute('aria-label', 'Chat name');
+
+  let finished = false;
+  function finish(commit) {
+    if (finished) return; // Enter blurs the input, so blur must not commit twice
+    finished = true;
+    renaming = null;
+    item.classList.remove('editing');
+    const value = input.value.trim();
+    const next = commit && value ? value : previous; // an empty or cancelled edit reverts
+    input.remove();
+    titleEl.hidden = false;
+    titleEl.textContent = next || 'Untitled';
+    if (next && next !== previous) renameChat(chat.id, next);
+  }
+
+  // The row's click handler opens the chat (and shuts the drawer on phones);
+  // typing here must not trigger it.
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') input.blur();
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+
+  item.classList.add('editing');
+  titleEl.hidden = true;
+  main.prepend(input);
+  input.focus();
+  input.select();
+  renaming = { cancel: () => finish(false) };
 }
 
 export function renderMemCount() {

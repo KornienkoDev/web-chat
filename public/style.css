@@ -505,6 +505,26 @@ html.dark #btnTheme .i-moon { display: none; }
 .chat-item-btn:active { background: var(--bg-2); }
 .chat-item-del:hover { color: var(--danger); }
 
+/* Inline rename: the input sits exactly where the title was — the negative
+   margin cancels its own left padding so the caret lands on the old glyph.
+   16px font keeps iOS from zooming the page when it takes focus. */
+.chat-item-input {
+  width: 100%;
+  min-width: 0;
+  margin-left: -5px;
+  padding: 2px 5px;
+  border: 1px solid var(--ring);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.3;
+  outline: none;
+}
+/* Hide the row's actions while a name is being typed, so a stray tap on the
+   cross cannot delete the chat that is being renamed. */
+.chat-item.editing .chat-item-btn { visibility: hidden; }
+
 /* ---------- Warning banner ---------- */
 .banner {
   padding: 8px 12px;
@@ -527,6 +547,49 @@ html.dark #btnTheme .i-moon { display: none; }
 .dialog-body { padding: 18px; }
 .dialog-body h2 { margin: 0 0 12px; font-size: 18px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* ---------- Confirm modal (built by ui/modal.js) ---------- */
+/* A tighter, quieter sibling of .dialog: same tokens so it belongs here, small
+   enough to read as a question. <dialog> centres it in the viewport already. */
+.modal {
+  width: min(400px, calc(100vw - 32px));
+  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+}
+@starting-style {            /* fades and settles in; ignored, not broken, if unsupported */
+  .modal { opacity: 0; transform: scale(0.97) translateY(4px); }
+}
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(1.5px);
+  transition: opacity 0.16s ease-out;
+}
+@starting-style { .modal::backdrop { opacity: 0; } }
+
+.modal-body { padding: 18px; }
+.modal-head { display: flex; align-items: center; gap: 10px; }
+.modal-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-danger);
+  color: var(--fg-danger);
+  font-size: 15px;
+  line-height: 1;
+}
+.modal.danger .modal-icon { display: flex; }
+.modal-title { margin: 0; font-size: 16px; }
+.modal-text {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre-wrap;        /* a remembered fact can hold line breaks */
+  overflow-wrap: anywhere;      /* a long token in a chat title must not widen the card */
+}
 
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); }
 .field > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
