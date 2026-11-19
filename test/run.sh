@@ -19,6 +19,16 @@ MOCK_BASE="${MOCK_BASE:-http://127.0.0.1:$MOCK_PORT/v1}"
 CDP_URL="${CDP_URL:-http://127.0.0.1:$CDP_PORT}"
 
 MEM_FILE="$(mktemp -t wc-test-memories.XXXXXX.json)"
+# mktemp leaves the file empty, which the server reads as invalid JSON; seed it
+# so the suite's first GET (the memory-file guard probe) answers properly.
+echo '[]' > "$MEM_FILE"
+# Snapshot of the repo's real memories file for the post-run shield below.
+REAL_MEM="$REPO/memories.json"
+MEM_BACKUP=""
+if [ -f "$REAL_MEM" ]; then
+  MEM_BACKUP="$(mktemp -t wc-mem-backup.XXXXXX.json)"
+  cp "$REAL_MEM" "$MEM_BACKUP"
+fi
 CHROME_DIR=""
 PIDS=()
 
@@ -28,6 +38,7 @@ cleanup() {
   sleep 0.2
   for pid in "${PIDS[@]:-}"; do kill -9 "$pid" 2>/dev/null || true; done
   [ -n "$CHROME_DIR" ] && rm -rf "$CHROME_DIR"
+  [ -n "$MEM_BACKUP" ] && rm -f "$MEM_BACKUP"
   rm -f "$MEM_FILE"
 }
 trap cleanup EXIT
@@ -39,6 +50,19 @@ wait_for() { # url, label
   done
   echo "timeout waiting for $2 ($1)" >&2; return 1
 }
+
+# --- never share ports with a live instance: if the suite's server fails to
+# bind and the tests silently reuse a running app, the memory reset below hits
+# that instance's real memories.json. Own the ports or don't run. ---
+if curl -s -o /dev/null --max-time 1 "$MOCK_BASE/models"; then
+  echo "port $MOCK_PORT is busy — a mock LLM already answers there; stop it or pick a free MOCK_PORT=…" >&2
+  exit 1
+fi
+if curl -s -o /dev/null --max-time 1 "$APP_URL"; then
+  echo "port $APP_PORT is busy — a live app answers there and the suite wipes its memory file on purpose." >&2
+  echo "Stop it or pick a free APP_PORT=… (run.sh must own the server it tests)." >&2
+  exit 1
+fi
 
 # --- the model: mock only ---
 echo "start: mock LLM on :$MOCK_PORT"
@@ -70,13 +94,25 @@ fi
 # --- run the suite against those exact endpoints ---
 echo "run: cdp-suite"
 set +e
-APP_URL="$APP_URL" MOCK_BASE="$MOCK_BASE" CDP_URL="$CDP_URL" node test/cdp-suite.mjs
+APP_URL="$APP_URL" MOCK_BASE="$MOCK_BASE" CDP_URL="$CDP_URL" WC_TEST_MEM_FILE="$MEM_FILE" node test/cdp-suite.mjs
 rc=$?
 set -e
 
-# Safety net: the suite must never have written to the repo's real memory file.
-if [ -s "$REPO/memories.json" ] && cmp -s "$MEM_FILE" "$REPO/memories.json"; then
-  echo "WARNING: test memory file matches repo memories.json — something pointed at the real file" >&2
+# Last-resort shield: whatever path the tests took, the repo's real memories
+# file must be byte-identical when we are done. If it changed (e.g. someone ran
+# the suite against a live server without this runner), keep the modified
+# content for review, restore the snapshot, and fail the run.
+touched=0
+if [ -n "$MEM_BACKUP" ]; then cmp -s "$MEM_BACKUP" "$REAL_MEM" || touched=1
+elif [ -f "$REAL_MEM" ]; then touched=1   # appeared from nowhere
+fi
+if [ "$touched" = 1 ]; then
+  kept="$(mktemp -t wc-mem-changed.XXXXXX.json)"
+  cp "$REAL_MEM" "$kept"
+  if [ -n "$MEM_BACKUP" ]; then cp "$MEM_BACKUP" "$REAL_MEM"; else rm -f "$REAL_MEM"; fi
+  echo "ERROR: memories.json changed during the test run — restored the snapshot;" >&2
+  echo "       the modified content is kept at $kept for review" >&2
+  rc=1
 fi
 
 exit "$rc"

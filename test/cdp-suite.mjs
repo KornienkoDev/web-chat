@@ -1,12 +1,19 @@
 // Full CDP test suite for the modular web chat. Runs against mock-llm.js ONLY
 // (default http://127.0.0.1:11435/v1): sending test chats to a real model evicts
 // its KV cache and flushes the served conversation, so that is never allowed.
-// The server must also run with WC_MEMORY_FILE pointing to a throwaway file,
-// so the real memories.json is never reset. Use test/run.sh — it starts all of
-// this correctly.
+// The suite WIPES the server's memory file as its first step, so it refuses to
+// run unless WC_TEST_MEM_FILE names the exact throwaway file the app under test
+// was started with (test/run.sh does all of this correctly).
+import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const MOCK_BASE = process.env.MOCK_BASE ?? 'http://127.0.0.1:11435/v1';
+const MEM_FILE = process.env.WC_TEST_MEM_FILE;
+if (!MEM_FILE) {
+  console.error('WC_TEST_MEM_FILE is not set: this suite resets the memory file, so it must be ' +
+    'told which throwaway file the app under test uses. Run it through test/run.sh.');
+  process.exit(1);
+}
 try {
   await fetch(`${MOCK_BASE}/models`, { signal: AbortSignal.timeout(2000) });
 } catch {
@@ -54,6 +61,16 @@ await reload();
 await evalJs(`localStorage.clear()`);
 // Pin the mock endpoint before any request can reach the default (real) one.
 await evalJs(`Object.assign(__wc.state.settings, { baseUrl: ${JSON.stringify(MOCK_BASE)} }); __wc.saveSettings();`);
+// The reset below wipes whatever memory file the app under test serves, so
+// first make sure it is the throwaway run.sh started the server with. A
+// mismatch means we are pointed at a live instance — abort before touching it.
+const servedMem = await evalJs(`(async () => (await (await fetch('/api/memory')).json()).file)()`, true);
+if (path.resolve(String(servedMem)) !== path.resolve(MEM_FILE)) {
+  console.error(`refusing to run: the app at ${process.env.APP_URL ?? 'localhost:3000'} writes ` +
+    `memories to ${servedMem}, not the throwaway ${MEM_FILE} — a live instance is in the way.`);
+  ws.close();
+  process.exit(1);
+}
 // Also reset the server-side memory file so runs start from a clean slate.
 await evalJs(`fetch('/api/memory', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: '[]' })`, true);
 await reload();
