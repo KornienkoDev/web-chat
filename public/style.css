@@ -520,26 +520,6 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 #input::-webkit-scrollbar { display: none; }
 #input:focus { border-color: var(--ring); }
 
-/* The paperclip mirrors the send key inside the field's left edge. Only the
-   glyph reacts on hover — no background pill. Returning from the file dialog
-   leaves the button focused, and Chromium then draws a focus ring and keeps
-   the hover tint alive; :focus therefore reverts to the plain colour and the
-   outline is dropped, so the clip never looks stuck-highlighted. */
-.attach-btn {
-  position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  font-size: 18px;
-  color: var(--text-dim);
-  outline: none;
-}
-.attach-btn:hover { color: var(--text); }
-.attach-btn:focus { color: var(--text-dim); }
-
 /* Staged files, chips above the field: image chips get a thumbnail, document
    chips an icon; the ✕ puts the file back where it came from. */
 .attach-bar {
@@ -699,6 +679,32 @@ html.dark #btnTheme .ic-sun { display: none; }
 /* md-stop's square is symmetric and centres itself — undo the plane's nudge.
    Its ink is small inside the box, so it gets a size bump to fill the badge. */
 .send-btn.stop-mode::before { content: "\f04db"; transform: none; font-size: 1.2em; }
+
+/* The paperclip mirrors the send key inside the field's left edge — and like
+   the send key it must be declared after .icon-btn, whose square 42px box and
+   :active pill would otherwise win on order. Only the glyph reacts: brighter
+   on hover; opening the file dialog leaves the button focused, so :focus
+   reverts to the plain colour and the outline is dropped — no stuck ring, no
+   kept-alive hover. Press feedback stays, but the generic 42px pill reads as
+   a flash next to a bare glyph, so :active paints a small dot hugging it
+   instead (two classes for the same order reason as .ic.ic-* nudges). */
+.attach-btn {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 18px;
+  color: var(--text-dim);
+  outline: none;
+}
+.attach-btn:hover { color: var(--text); }
+.attach-btn:focus { color: var(--text-dim); }
+.icon-btn.attach-btn:active {
+  background: radial-gradient(circle at center, var(--bg-3) 0 9px, transparent 9.5px);
+}
 
 .btn {
   min-height: 40px; /* comfortable touch targets */
