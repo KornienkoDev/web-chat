@@ -1,18 +1,78 @@
 /* Mobile-first: the whole layout is one flex column; the sidebar is an
    off-canvas drawer on small screens and a fixed column from 768px up. */
+/* Colour tokens follow the llama.cpp web UI design system (ui/lib/ui): the same
+   oklch neutral greys, neutral (charcoal/light) primary actions, translucent
+   white hairlines and status tints mixed from a single red/blue. Light mode is
+   their "Paper" theme (white panels on a faint grey page); dark mode activates
+   when <html class="dark"> is set by js/ui/theme.js. */
 :root {
-  --bg: #0f1115;
-  --bg-2: #171a21;
-  --bg-3: #212632;
-  --border: #2a3140;
-  --text: #e6e9ef;
-  --text-dim: #9aa3b2;
-  --accent: #4f8cff;
-  --accent-2: #3a6fd8;
-  --danger: #e5534b;
+  /* primitives: llama-brand neutral scale + the interface reds and blues */
+  --n25: oklch(0.988 0 0);
+  --n50: oklch(0.985 0 0);
+  --n100: oklch(0.97 0 0);
+  --n150: oklch(0.95 0 0);
+  --n200: oklch(0.922 0 0);
+  --n300: oklch(0.87 0 0);
+  --n400: oklch(0.708 0 0);
+  --n500: oklch(0.556 0 0);
+  --n800: oklch(0.269 0 0);
+  --n900: oklch(0.205 0 0);
+  --n925: oklch(0.16 0 0);
+  --n950: oklch(0.145 0 0);
+  --red-450: oklch(0.635 0.229 28);
+  --red-550: oklch(0.588 0.236 28);
+  --red-600: oklch(0.55 0.22 27);
+  --red-800: oklch(0.43 0.17 27);
+  --blue-400: oklch(0.7 0.163 255);
+  --blue-450: oklch(0.67 0.173 256);
+  --blue-650: oklch(0.535 0.177 256);
+
+  /* light ("Paper") semantics */
+  --bg: var(--n25);
+  --bg-2: oklch(1 0 0);
+  --bg-3: var(--n100);
+  --border: var(--n200);
+  --text: var(--n950);
+  --text-dim: var(--n500);
+  --accent: var(--n900);        /* primary action: charcoal key, llama-style */
+  --accent-fg: var(--n50);
+  --ring: var(--n400);          /* neutral focus ring, like llama's */
+  --danger: var(--red-550);
+  --danger-fg: oklch(1 0 0);
+  --fg-danger: var(--red-600);
+  --surface-danger: color-mix(in oklab, var(--danger) 11%, var(--bg));
+  --fg-info: var(--blue-650);
+  --surface-info: color-mix(in oklab, var(--blue-650) 11%, var(--bg));
+  --bubble-user: var(--n150);
+  --code-bg: var(--n100);
+  --inline-code-bg: oklch(0 0 0 / 0.05);
+  --hover-tint: oklch(0 0 0 / 0.06);
   --radius: 12px;
   --sidebar-w: 300px;
   --topbar-h: 52px;
+  color-scheme: light;
+}
+
+html.dark {
+  --bg: var(--n925);
+  --bg-2: var(--n900);
+  --bg-3: var(--n800);
+  --border: oklch(1 0 0 / 0.18);
+  --text: var(--n50);
+  --text-dim: var(--n400);
+  --accent: var(--n200);        /* light key on the dark page */
+  --accent-fg: var(--n900);
+  --ring: var(--n500);
+  --danger: var(--red-450);
+  --danger-fg: var(--red-800);  /* dark glyph on a lit red, their "orb" look */
+  --fg-danger: var(--red-450);
+  --surface-danger: color-mix(in oklab, var(--danger) 16%, var(--bg));
+  --fg-info: var(--blue-400);
+  --surface-info: color-mix(in oklab, var(--blue-450) 16%, var(--bg));
+  --bubble-user: oklch(1 0 0 / 0.09);
+  --code-bg: var(--n900);
+  --inline-code-bg: oklch(1 0 0 / 0.08);
+  --hover-tint: oklch(1 0 0 / 0.08);
   color-scheme: dark;
 }
 
@@ -82,7 +142,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 /* ---------- Main column ---------- */
@@ -141,8 +201,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 .msg.user {
   align-self: flex-end;
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--bubble-user);
+  color: var(--text);
   border-bottom-right-radius: 4px;
 }
 .msg.assistant {
@@ -152,8 +212,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 .msg.error {
   align-self: center;
-  background: rgba(229, 83, 75, 0.15);
-  color: #ff9d97;
+  background: var(--surface-danger);
+  color: var(--fg-danger);
 }
 .msg .msg-meta {
   display: flex;
@@ -173,7 +233,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .msg.md h4, .msg.md h5 { font-size: 1em; }
 .msg.md ul, .msg.md ol { margin: 0.35em 0; padding-left: 1.4em; }
 .msg.md li { margin: 0.15em 0; }
-.msg.md a { color: var(--accent); }
+.msg.md a { color: var(--fg-info); }
 .msg.md blockquote {
   margin: 0.4em 0;
   padding: 0.2em 0.8em;
@@ -183,14 +243,14 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .msg.md code {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.87em;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--inline-code-bg);
   padding: 0.15em 0.4em;
   border-radius: 5px;
 }
 .msg.md pre {
   margin: 0.5em 0;
   padding: 0;
-  background: #0b0d11;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
@@ -248,23 +308,33 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   outline: none;
   line-height: 1.4;
 }
-#input:focus { border-color: var(--accent); }
+#input:focus { border-color: var(--ring); }
 
 /* ---------- Buttons ---------- */
 .icon-btn {
   flex: none;
   width: 42px;
   height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: 10px;
   background: transparent;
   font-size: 18px;
 }
 .icon-btn:active { background: var(--bg-3); }
+.icon-btn svg { width: 19px; height: 19px; }
 
-.send-btn { background: var(--accent); color: #fff; }
+/* Theme toggle: offer the mode you are not in (moon on light, sun on dark). */
+#btnTheme .i-sun { display: none; }
+html.dark #btnTheme .i-sun { display: block; }
+html.dark #btnTheme .i-moon { display: none; }
+
+.send-btn { background: var(--accent); color: var(--accent-fg); }
 .send-btn:disabled { opacity: 0.4; cursor: default; }
-.stop-btn { background: var(--danger); }
+/* the send key's stop role while a reply streams */
+.send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
 
 .btn {
   min-height: 40px; /* comfortable touch targets */
@@ -273,9 +343,9 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   border-radius: 10px;
   background: var(--bg-3);
 }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .btn-ghost { background: transparent; }
-.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: var(--danger-fg); }
 .btn-sm { min-height: 34px; padding: 4px 10px; }
 .btn-block { width: 100%; }
 
@@ -286,8 +356,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   margin-top: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(79, 140, 255, 0.12);
-  color: #a8c6ff;
+  background: var(--surface-info);
+  color: var(--fg-info);
   font-size: 12.5px;
 }
 .msg-action {
@@ -298,7 +368,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   padding: 4px 8px;
   border-radius: 8px;
 }
-.msg-action:hover, .msg-action:active { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.msg-action:hover, .msg-action:active { opacity: 1; background: var(--hover-tint); }
 @media (hover: none) { .msg-action { opacity: 0.7; } }
 
 .mem-add { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
@@ -349,7 +419,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
-.mem-tag.src-tool { color: #a8c6ff; background: rgba(79, 140, 255, 0.15); }
+.mem-tag.src-tool { color: var(--fg-info); background: var(--surface-info); }
 
 .btn-danger-ghost { color: var(--danger); border-color: transparent; background: transparent; margin-right: auto; }
 
@@ -366,7 +436,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   max-width: calc(100vw - 32px);
   padding: 9px 16px;
   border-radius: 99px;
-  background: #000;
+  background: var(--bg-3);
   border: 1px solid var(--border);
   color: var(--text);
   font-size: 13.5px;
@@ -382,7 +452,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   background: var(--bg);
   outline: none;
 }
-.chat-search:focus { border-color: var(--accent); }
+.chat-search:focus { border-color: var(--ring); }
 
 .chat-list {
   flex: 1;
@@ -431,8 +501,8 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 /* ---------- Warning banner ---------- */
 .banner {
   padding: 8px 12px;
-  background: rgba(229, 83, 75, 0.15);
-  color: #ff9d97;
+  background: var(--surface-danger);
+  color: var(--fg-danger);
   font-size: 13px;
   text-align: center;
 }
@@ -446,7 +516,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   color: var(--text);
   padding: 0;
 }
-.dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .dialog-body { padding: 18px; }
 .dialog-body h2 { margin: 0 0 12px; font-size: 18px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
@@ -460,7 +530,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   background: var(--bg);
   outline: none;
 }
-.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--ring); }
 .field textarea { font-size: 14px; resize: vertical; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 

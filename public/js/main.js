@@ -9,6 +9,7 @@ import { addMemory, deleteMemory } from './memory.js';
 import { on } from './events.js';
 
 import { $, initFeedback } from './ui/dom.js';
+import { initTheme } from './ui/theme.js';
 import { initHeader, renderHeader } from './ui/header.js';
 import { initMessages, renderMessages, appendMessageEl, updateSavedFacts, atBottom, scrollToBottom } from './ui/messages.js';
 import { initSidebar, renderChatList, renderMemCount } from './ui/sidebar.js';
@@ -24,6 +25,7 @@ function renderAll() {
 }
 
 function boot() {
+  initTheme();
   initFeedback();
   initHeader();
   initMessages();

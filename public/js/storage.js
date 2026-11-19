@@ -9,6 +9,19 @@ const LS_CHATS = 'wc.chats';
 const LS_ACTIVE = 'wc.active';
 const LS_SETTINGS = 'wc.settings';
 const LS_MEMORY = 'wc.memory';
+const LS_THEME = 'wc.theme';
+
+// ---------- Theme ----------
+// The pre-paint inline script in index.html reads the same key directly;
+// keep the two in sync if this ever changes shape.
+export function loadThemePref() {
+  const v = localStorage.getItem(LS_THEME);
+  return v === 'light' || v === 'dark' ? v : null; // null = follow the system
+}
+export function saveThemePref(pref) {
+  if (pref === 'light' || pref === 'dark') localStorage.setItem(LS_THEME, pref);
+  else localStorage.removeItem(LS_THEME);
+}
 
 // ---------- Chats ----------
 export function loadChats() {

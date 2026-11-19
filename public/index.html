@@ -3,8 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f1115">
+  <meta name="theme-color" content="#fcfcfc">
   <title>Local Web Chat</title>
+  <script>
+    // Apply the saved theme before first paint to avoid a colour flash.
+    // Mirrors js/ui/theme.js: an explicit choice wins, else follow the OS.
+    (function () {
+      try {
+        var t = localStorage.getItem('wc.theme');
+        if (t !== 'light' && t !== 'dark') {
+          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        if (t === 'dark') document.documentElement.classList.add('dark');
+        document.querySelector('meta[name="theme-color"]')
+          .setAttribute('content', t === 'dark' ? '#151515' : '#fcfcfc');
+      } catch (e) { /* private mode etc.: light is fine */ }
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,6 +51,10 @@
           <strong id="chatTitle">New chat</strong>
           <small id="modelLabel"></small>
         </div>
+        <button id="btnTheme" class="icon-btn" aria-label="Switch theme" title="Switch theme">
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
       </header>
 
       <div id="warning" class="banner" hidden></div>
@@ -44,7 +63,6 @@
       <footer class="composer">
         <textarea id="input" rows="1" placeholder="Message…" autocomplete="off"></textarea>
         <button id="btnSend" class="icon-btn send-btn" aria-label="Send">&#10148;</button>
-        <button id="btnStop" class="icon-btn send-btn stop-btn" aria-label="Stop" hidden>&#9632;</button>
       </footer>
     </main>
   </div>

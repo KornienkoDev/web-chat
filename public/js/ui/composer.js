@@ -1,16 +1,19 @@
-// Composer: textarea + send/stop buttons. Pure UI; delegates to session.js.
+// Composer: textarea + one send button that turns into a stop button while a
+// reply streams. Pure UI; delegates to session.js.
 import { sendMessage, stopStreaming } from '../session.js';
 import { $ } from './dom.js';
 
-let input, btnSend, btnStop;
+let input, btnSend;
+let streaming = false;
 
 export function initComposer() {
   input = $('input');
   btnSend = $('btnSend');
-  btnStop = $('btnStop');
 
-  btnSend.addEventListener('click', () => sendMessage(input.value));
-  btnStop.addEventListener('click', stopStreaming);
+  btnSend.addEventListener('click', () => {
+    if (streaming) stopStreaming();
+    else sendMessage(input.value);
+  });
   input.addEventListener('input', autoGrow);
   input.addEventListener('keydown', (e) => {
     // Enter sends, Shift+Enter inserts a newline.
@@ -27,8 +30,11 @@ export function clearInput() {
 }
 
 export function setStreamingUI(on) {
-  btnSend.hidden = on;
-  btnStop.hidden = !on;
+  streaming = on;
+  // The same key sends or halts: swap glyph, colour and label with its role.
+  btnSend.classList.toggle('stop-mode', on);
+  btnSend.innerHTML = on ? '&#9632;' : '&#10148;';
+  btnSend.setAttribute('aria-label', on ? 'Stop' : 'Send');
 }
 
 // Auto-grow textarea with the typed text.
