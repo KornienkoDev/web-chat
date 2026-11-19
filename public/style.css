@@ -304,6 +304,32 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   max-height: 320px; /* long chains scroll instead of eating the screen */
   overflow-y: auto;
 }
+/* Live "Thinking…" label: a soft highlight band sweeps across the word while
+   the model streams reasoning. The gradient holds one bright band centred in
+   a tile twice the label wide, so shifting the position by exactly one tile
+   loops seamlessly and both ends of the cycle look identical. */
+.msg-think-live .msg-think-label {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text) 50%, var(--text-dim) 100%);
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: think-shimmer 1.8s linear infinite;
+}
+@keyframes think-shimmer {
+  to { background-position: 100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-think-live .msg-think-label {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--text-dim);
+  }
+}
 
 /* Markdown-rendered assistant replies: HTML structure handles whitespace. */
 .msg.md .msg-text { white-space: normal; }
@@ -466,6 +492,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .ic-cog::before    { content: "\f0493"; }  /* md-cog */
 .ic-upload::before { content: "\f0552"; }  /* md-upload   tray with an arrow up */
 .ic-download::before { content: "\f01da"; }  /* md-download tray with an arrow down */
+.ic-wrench::before { content: "\f05b7"; }  /* md-wrench   MCP tool-usage badge */
 
 /* The nerd-font merge mixes icon grids, so identical font-sizes do not give
    identical optical sizes. Ink heights, measured from the font itself:
@@ -554,6 +581,58 @@ html.dark #btnTheme .ic-sun { display: none; }
   display: flex;
   align-items: baseline;
   gap: 6px;
+}
+/* The reply's "process" strip: thinking blocks and tool pills in the order they
+   happened, stacked vertically above the answer (think → tool → think → …). A
+   running tool shimmers with the same band as the "Thinking…" label; a failed
+   one turns red. Tool pills are left-aligned pills; think blocks fill the row. */
+.msg-process {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msg-process .msg-think { margin: 0; }
+.msg-process .msg-tool { align-self: flex-start; }
+.msg-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.msg-tool .ic { flex: none; }
+.msg-tool-name { font-weight: 600; color: var(--text); white-space: nowrap; }
+.msg-tool-arg { color: var(--text-dim); overflow-wrap: anywhere; }
+.msg-tool.is-error {
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+  background: var(--surface-danger);
+  color: var(--fg-danger);
+}
+.msg-tool.is-error .msg-tool-name { color: var(--fg-danger); }
+.msg-tool.is-running .msg-tool-name {
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text) 50%, var(--text-dim) 100%);
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: think-shimmer 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-tool.is-running .msg-tool-name {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--text-dim);
+  }
 }
 .msg-action {
   border: none;

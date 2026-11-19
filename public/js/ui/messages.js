@@ -7,6 +7,7 @@ import { regenerate } from '../session.js';
 import { emit } from '../events.js';
 import { $ } from './dom.js';
 import { mdToHtml } from './markdown.js';
+import { buildProcess } from './timeline.js';
 
 let messagesEl;
 let mainEl; // the .main column; gets .empty so CSS can centre the composer
@@ -81,25 +82,11 @@ function formatMsgTime(ms) {
   return `${d.toLocaleDateString([], opts)}, ${time}`;
 }
 
-// Collapsible model reasoning: collapsed by default, only open while the model
-// is still generating (mountLiveThink).
-function thinkEl(m, { open = false, label = 'Thinking' } = {}) {
-  const box = document.createElement('details');
-  box.className = 'msg-think';
-  box.open = open;
-  const sum = document.createElement('summary');
-  sum.textContent = label;
-  const body = document.createElement('div');
-  body.className = 'msg-think-text';
-  body.textContent = m.reasoning || '';
-  box.append(sum, body);
-  return box;
-}
-
 export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}${md ? ' md' : ''}`;
-  if (m.reasoning) el.appendChild(thinkEl(m));
+  const process = buildProcess(m); // thinking + tool pills, in chronological order
+  if (process) el.appendChild(process);
   const textEl = document.createElement('div');
   textEl.className = 'msg-text';
   if (md) textEl.innerHTML = mdToHtml(m.content);
@@ -163,14 +150,6 @@ export function appendMessageEl(m) {
   messagesEl.appendChild(el);
   scrollToBottom();
   return { el, textEl: el.querySelector('.msg-text') };
-}
-
-// Called on the first thinking token: mounts an open live think block at the
-// top of the bubble and returns the element the streamer fills.
-export function mountLiveThink(el, m) {
-  const box = thinkEl(m, { open: true, label: 'Thinking\u2026' });
-  el.prepend(box);
-  return box.querySelector('.msg-think-text');
 }
 
 // Re-render a still-streaming reply's Markdown. Called on a throttle, so partial

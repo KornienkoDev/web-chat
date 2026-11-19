@@ -38,7 +38,8 @@ URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
   (`[m2 | 2026-11-05] fact`, newest first), so the model can tell which of two
   contradicting facts is newer and remove outdated ones itself with
   `forget_memory` (by id or wording). The Memory panel also shows per-fact
-  dates. Facts appear as a "remembered" badge and stay manageable in the panel
+  dates. Facts appear as a "remembered" badge — and each save/forget surfaces
+  as a pill in the reply's process strip — and stay manageable in the panel
   (manual add, per-chat extraction, forget).
   Memories are persisted to a plain JSON file on the server (`memories.json`,
   override with `WC_MEMORY_FILE`) and mirrored to `localStorage`, so they
@@ -55,6 +56,13 @@ URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
   declared in `mcp.json`, spawned lazily as local stdio subprocesses, and each
   tool is offered to the model as `server__tool`; results are fed back in an
   agentic loop. A server that fails to start only loses its own tools.
+  **Process strip** — every reply shows what the model actually did, in the
+  order it did it: collapsible *Thinking* blocks interleaved with a labelled
+  pill per tool call (web search *and* save/forget memory), so a
+  search → reason → answer chain reads top-to-bottom instead of one merged
+  blob. Pills carry a query preview, shimmer while a call runs, turn red if it
+  fails, and stay with the message (the timeline is stripped from the history
+  sent back to the model).
 - **Mobile-first responsive UI** — drawer sidebar on phones, safe-area aware,
   16 px inputs (no iOS zoom), touch targets ≥ 40 px.
 - Markdown rendering (XSS-safe, own mini-renderer) with copy buttons on code

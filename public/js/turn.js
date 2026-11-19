@@ -35,9 +35,10 @@ function formatGap(ms) {
 function stampHistory(msgs) {
   let prev = null;
   return msgs.map((m) => {
-    // Upstream APIs may reject unknown fields like ts and reasoning (thinking
-    // is display-only history; models do not expect their own past reasoning).
-    const { ts, reasoning, savedFacts, ...clean } = m;
+    // Upstream APIs may reject unknown fields like ts and reasoning (thinking,
+    // saved facts and the tool-usage timeline are display-only history; models
+    // do not expect their own past reasoning or tool-use notes echoed back).
+    const { ts, reasoning, savedFacts, mcpUsed, timeline, ...clean } = m;
     if (!ts) { prev = null; return clean; }
     const tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
     prev = ts;
@@ -51,6 +52,33 @@ const MCP_TOOL_GUIDANCE =
   'the answer depends on current events, recent information, or any fact you are not ' +
   'fully sure about — call the tool first, then answer from its result. Do not claim you ' +
   'cannot browse the web.';
+
+// A short one-line preview of a tool call's arguments for the usage badge: the
+// first meaningful argument (a search query or URL usually), flattened and
+// capped so one long prompt can't stretch the badge across the screen.
+function mcpArgPreview(args) {
+  if (!args || typeof args !== 'object') return '';
+  const preferred = ['query', 'q', 'search', 'url', 'uri', 'text', 'input', 'prompt', 'name'];
+  let hit = '';
+  for (const k of preferred) {
+    if (typeof args[k] === 'string' && args[k].trim()) { hit = args[k].trim(); break; }
+  }
+  if (!hit) {
+    for (const v of Object.values(args)) {
+      if (typeof v === 'string' && v.trim()) { hit = v.trim(); break; }
+      if (typeof v === 'number' || typeof v === 'boolean') { hit = String(v); break; }
+    }
+  }
+  const flat = hit.replace(/\s+/g, ' ');
+  return flat.length > 80 ? flat.slice(0, 80) + '…' : flat;
+}
+
+// Collapse a raw string (a saved fact, a forget target) to a single short line
+// for a tool pill's tooltip.
+function preview(s, max = 80) {
+  const flat = String(s || '').replace(/\s+/g, ' ').trim();
+  return flat.length > max ? flat.slice(0, max) + '…' : flat;
+}
 
 export function buildApiMessages(chat) {
   const ctx = Math.max(2, Number(state.settings.contextMessages) || 20);
@@ -72,15 +100,32 @@ export function buildApiMessages(chat) {
   return msgs;
 }
 
-// One user turn: keep calling the model while it invokes tools (save_memory or
-// any MCP tool), executing them locally and feeding the results back. Max 6
-// rounds so a search -> read -> answer chain fits.
-// onReasoning streams the model's thinking tokens for the live collapsible.
-export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, signal) {
+// One user turn: keep calling the model while it invokes tools (save_memory,
+// forget_memory or any MCP tool), executing them locally and feeding the
+// results back. Max 6 rounds so a search -> read -> answer chain fits.
+//
+// Everything the model does this turn — its thinking and every tool call — is
+// recorded on `asst.timeline` as one ordered list of steps ({kind:'think'|
+// 'tool', …}) so a multi-round turn reads think → tool → think → tool instead
+// of one merged blob. onText streams the answer; onSaved refreshes the
+// "Remembered" note; onTimeline redraws the process strip after each change.
+export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signal) {
   const apiMessages = buildApiMessages(chat);
   const tools = state.mcpTools.length
     ? [MEMORY_TOOL, FORGET_TOOL, ...state.mcpTools]
     : [MEMORY_TOOL, FORGET_TOOL];
+
+  const steps = () => (asst.timeline || (asst.timeline = []));
+  // Reasoning tokens grow the current think step; the first token after a tool
+  // call opens a fresh one — that boundary is what the timeline is for.
+  const onReasoning = (delta) => {
+    const list = steps();
+    const last = list[list.length - 1];
+    if (last && last.kind === 'think') last.text += delta;
+    else list.push({ kind: 'think', text: delta });
+    onTimeline?.();
+  };
+
   for (let round = 0; round < 6; round++) {
     const { text, toolCalls } = await streamCompletion(
       apiMessages, onText, signal, { tools, onReasoning });
@@ -95,24 +140,38 @@ export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, sign
         const fact = String(args.fact || '').trim();
         const added = addMemory(fact, 'tool');
         if (added && fact) saved.push(fact);
+        steps().push({ kind: 'tool', family: 'memory', action: 'save', name: tc.name, arg: preview(fact) });
+        onTimeline?.();
         toolResults.push({
           role: 'tool',
           tool_call_id: tc.id,
           content: added ? 'Saved.' : fact ? 'Already known.' : 'No fact given.',
         });
       } else if (tc.name === 'forget_memory') {
+        const target = String(args.memory_id_or_text || '');
+        steps().push({ kind: 'tool', family: 'memory', action: 'forget', name: tc.name, arg: preview(target) });
+        onTimeline?.();
         toolResults.push({
           role: 'tool',
           tool_call_id: tc.id,
-          content: forgetMemory(String(args.memory_id_or_text || '')),
+          content: forgetMemory(target),
         });
       } else if (state.mcpTools.some((t) => t.function.name === tc.name)) {
+        // A live "running" pill flips to ok/error as the call resolves; it stays
+        // the newest timeline step for the whole call, so the view can update it.
+        const step = { kind: 'tool', family: 'mcp', name: tc.name, arg: mcpArgPreview(args), status: 'running' };
+        steps().push(step);
+        onTimeline?.();
         let out;
         try {
           out = await callMcpTool(tc.name, args);
+          step.status = 'ok';
         } catch (err) {
           out = `Tool call failed: ${err.message}`;
+          step.status = 'error';
+          step.error = err.message;
         }
+        onTimeline?.();
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: out });
       } else {
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: 'Unknown tool.' });

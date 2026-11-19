@@ -96,6 +96,10 @@ check('model saved facts by itself', mem.length >= 2 && mem.every((m) => m.sourc
   `${mem.length} facts`);
 check('facts cover name/diet/dog', /marcin/.test(joined) && /vegetarian/.test(joined) && /pixel/.test(joined));
 check('savedFacts badge on message', Array.isArray(lastMsg.savedFacts) && lastMsg.savedFacts.length >= 2);
+check('memory tool use shown on timeline',
+  Array.isArray(lastMsg.timeline)
+  && lastMsg.timeline.filter((s) => s.kind === 'tool' && s.family === 'memory' && s.action === 'save').length >= 2,
+  JSON.stringify((lastMsg.timeline || []).map((s) => s.kind + (s.action ? '/' + s.action : ''))));
 check('memory persisted', await evalJs(`JSON.parse(localStorage.getItem('wc.memory')||'[]').length >= 2`));
 await sleep(500); // let the debounced memory-file write (250ms) land before reading it back
 const memFile = await evalJs(`(async () => (await fetch('/api/memory')).json())()`, true);
@@ -111,6 +115,12 @@ await evalJs(`__wc.sendMessage('I am not vegetarian anymore, please forget that 
 const forgetOut = await evalJs(`__wc.activeChat().messages.at(-1).content`);
 const vegLeft = await evalJs(`__wc.state.memory.filter(m=>/vegetarian/i.test(m.text)).length`);
 check('forget_memory tool round-trip', vegLeft === 0 && /Forgot/i.test(forgetOut), forgetOut.slice(0, 100));
+const forgetTl = await evalJs(`__wc.activeChat().messages.at(-1).timeline || []`);
+check('forget_memory shown on timeline',
+  forgetTl.some((s) => s.kind === 'tool' && s.family === 'memory' && s.action === 'forget'),
+  JSON.stringify(forgetTl.map((s) => s.action || s.kind)));
+const memPills = await evalJs(`[...document.querySelectorAll('.msg-process .msg-tool')].map((p) => p.textContent).join(' | ')`);
+check('memory tool pills rendered in chat', /memory · save/.test(memPills) && /memory · forget/.test(memPills), memPills.slice(0, 120));
 
 // Trivia must not be saved.
 const before = await evalJs(`__wc.state.memory.length`);
@@ -213,6 +223,40 @@ await evalJs(`__wc.sendMessage('Please search for the meaning of life')`, true);
 const searchReply = await evalJs(`__wc.activeChat().messages.at(-1).content`);
 check('mcp tool call round-trip', /Mockresult Alpha/i.test(searchReply) && /42/.test(searchReply),
   searchReply.slice(0, 90));
+
+// The tool use must be visible in the chat: a "tool" step on the reply's
+// timeline (server · tool) plus its query, drawn as a pill in the process strip.
+const searchMsg = await evalJs(`__wc.activeChat().messages.at(-1)`);
+const searchTools = (searchMsg.timeline || []).filter((s) => s.kind === 'tool');
+check('mcp usage recorded on timeline',
+  searchTools.some((t) => t.family === 'mcp' && /__search$/.test(t.name) && t.status === 'ok'),
+  JSON.stringify(searchMsg.timeline));
+check('mcp query captured on timeline',
+  searchTools.some((t) => /meaning of life/i.test(t.arg || '')),
+  searchTools.map((t) => t.arg).join(' | '));
+const badge = await evalJs(`(() => {
+  const pills = [...document.querySelectorAll('.msg-process .msg-tool')];
+  return { n: pills.length, text: pills.map((p) => p.textContent).join(' | ') };
+})()`);
+check('mcp usage pill rendered in chat',
+  badge.n >= 1 && /searchtest/.test(badge.text) && /search/i.test(badge.text), JSON.stringify(badge));
+
+// Regression: reasoning streamed after a tool call must open a FRESH think
+// block, not merge into the earlier one — thinking and tools stay interleaved
+// on the timeline (the bug was one growing "Thinking" blob).
+await evalJs(`Object.assign(__wc.state.settings, {thinking:'on'}); __wc.saveSettings();`, true);
+await evalJs(`__wc.sendMessage('Please search for cumulus clouds')`, true);
+await evalJs(`Object.assign(__wc.state.settings, {thinking:'off'}); __wc.saveSettings();`, true);
+const inter = await evalJs(`(() => {
+  const t = __wc.activeChat().messages.at(-1).timeline || [];
+  return {
+    kinds: t.map((s) => s.kind + (s.family ? ':' + s.family + (s.action ? '/' + s.action : '') : '')),
+    thinkAfterTool: t.some((s, i) => s.kind === 'think' && i > 0 && t[i - 1].kind === 'tool'),
+  };
+})()`);
+check('thinking opens a fresh block after a tool call',
+  inter.kinds.some((k) => k.startsWith('tool:mcp')) && inter.thinkAfterTool,
+  JSON.stringify(inter.kinds));
 
 // Disabling via settings: server honors it, the model no longer sees the tool.
 const mcpOff = await evalJs(`(async () => {

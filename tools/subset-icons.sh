@@ -2,7 +2,7 @@
 # Rebuild the icon font subset: public/fonts/wc-icons.woff2
 #
 # The app draws every icon from one Material Design glyph set that ships inside
-# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 16 below are used, so the
+# Symbols Nerd Font (2.5 MB, ~10.6k glyphs). Only the 17 below are used, so the
 # subset gets them in 3 KB instead. Keep this list in sync with the .ic-* rules
 # in style.css — a missing codepoint renders as a blank box, silently.
 #
@@ -32,6 +32,7 @@ CODEPOINTS=(
   U+F0594   # md-weather_night  theme toggle, light side
   U+F522    # oct-sun           theme toggle, dark side (the glyph the distro website uses)
   U+F09D1   # md-brain          memory: sidebar, save-to-memory, remembered badge
+  U+F05B7   # md-wrench         MCP tool-usage badge (model used an MCP tool)
 )
 ICONS=$(IFS=, ; echo "${CODEPOINTS[*]}")
 

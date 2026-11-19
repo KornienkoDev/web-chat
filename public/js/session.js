@@ -9,7 +9,7 @@ import { autoExtract } from './memory.js';
 let hooks = null;
 
 // hooks: { renderAll, appendMessage(msg) -> {el, textEl}, renderText(textEl, text),
-//          openThink(el, msg) -> thinkTextEl, updateSavedFacts(el, msg),
+//          updateProcess(el, msg), updateSavedFacts(el, msg),
 //          clearInput, setStreaming(on), scrollToBottom, atBottom }
 export function initSession(h) {
   hooks = h;
@@ -32,13 +32,11 @@ export async function sendMessage(text) {
   chat.messages.push(asst);
   const { el, textEl } = hooks.appendMessage(asst);
 
-  // Thinking tokens stream into a collapsible that is open while generating;
-  // the final renderAll rebuilds the bubble with it collapsed by default.
-  let thinkTextEl = null;
-  const onReasoning = (delta) => {
-    asst.reasoning = (asst.reasoning || '') + delta;
-    if (!thinkTextEl) thinkTextEl = hooks.openThink(el, asst);
-    thinkTextEl.textContent = asst.reasoning;
+  // The process strip (thinking blocks interleaved with tool pills) grows live
+  // above the reply; the timeline view appends/patches it in place, so each
+  // change just re-syncs and follows the stream when we are already at the end.
+  const onTimeline = () => {
+    hooks.updateProcess?.(el, asst);
     if (hooks.atBottom()) hooks.scrollToBottom();
   };
 
@@ -58,12 +56,12 @@ export async function sendMessage(text) {
   const onSaved = () => hooks.updateSavedFacts(el, asst);
 
   try {
-    await runChatTurn(chat, asst, onText, onSaved, onReasoning, state.controller.signal);
-    if (!asst.content && !asst.savedFacts?.length && !asst.reasoning) asst.content = '(empty response)';
+    await runChatTurn(chat, asst, onText, onSaved, onTimeline, state.controller.signal);
+    if (!asst.content && !asst.savedFacts?.length && !asst.timeline?.length) asst.content = '(empty response)';
     autoExtract(chat);
   } catch (e) {
     if (e.name === 'AbortError') {
-      if (!asst.content && !asst.savedFacts?.length && !asst.reasoning) chat.messages.pop();
+      if (!asst.content && !asst.savedFacts?.length && !asst.timeline?.length) chat.messages.pop();
     } else {
       chat.messages.pop();
       chat.messages.push({ role: 'error', content: e.message, ts: Date.now() });
