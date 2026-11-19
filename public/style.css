@@ -1022,7 +1022,6 @@ html.dark #btnTheme .ic-sun { display: none; }
 /* Touch devices have no hover: keep the controls visible. */
 @media (hover: none) { .chat-item-btn { visibility: visible; } }
 .chat-item-btn:active { background: var(--bg-2); }
-.chat-item-del:hover { color: var(--danger); }
 
 /* Inline rename: the input sits exactly where the title was — the negative
    margin cancels its own left padding so the caret lands on the old glyph.
@@ -1094,8 +1093,10 @@ html.dark #btnTheme .ic-sun { display: none; }
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--surface-danger);
-  color: var(--fg-danger);
+  /* Neutral like every other icon: the red read as an error, but the dialog is
+     just asking for confirmation of something the user already chose. */
+  background: var(--bg-3);
+  color: var(--text-dim);
   font-size: 15px;
   line-height: 1;
 }
