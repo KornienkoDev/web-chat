@@ -15,6 +15,8 @@
         <span class="brand">Local Chat</span>
         <button id="btnNewChat" class="btn btn-primary btn-sm" title="New chat">+ New</button>
       </div>
+      <input id="chatSearch" class="chat-search" type="search" placeholder="Search chats" autocomplete="off">
+      <nav id="chatList" class="chat-list" aria-label="Chat history"></nav>
       <div class="sidebar-foot">
         <button id="btnSettings" class="btn btn-ghost btn-block">Settings</button>
       </div>
@@ -30,6 +32,7 @@
         </div>
       </header>
 
+      <div id="warning" class="banner" hidden></div>
       <div id="messages" class="messages" role="log" aria-live="polite"></div>
 
       <footer class="composer">
