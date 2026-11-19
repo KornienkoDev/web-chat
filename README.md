@@ -10,11 +10,11 @@ machine and the conversation never leaves it.
 
 ```bash
 ./start.sh                     # serves the UI on http://localhost:3000
-./start.sh --mock              # …plus the built-in mock LLM — no GPU or real model needed
 ```
 
-`start.sh` is the only entry point you need: it runs `node server.js`, waits for
-the mock to answer when you pass `--mock`, and stops both on Ctrl+C. It needs
+`start.sh` is the only entry point you need: it runs `node server.js` plus the
+built-in mock LLM (silently, on port 11435 — the Settings mock toggle decides
+whether the app uses it), and stops both on Ctrl+C. It needs
 nothing beyond Node; `--help` prints the supported environment variables
 (`PORT`, `MOCK_PORT`, `WC_MEMORY_FILE`, `WC_ALLOW_LAN`).
 
@@ -25,8 +25,9 @@ Studio, Ollama `…/v1`, …): API base URL, API key, model (auto-discovered fro
 `/models`), temperature, max tokens, context size, system prompt and a
 thinking-mode toggle for Qwen-style models.
 
-No model running yet? Start `./start.sh --mock` and point **Settings → API base
-URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
+No model running yet? Flip **Settings → Use built-in mock LLM** and the app
+talks to the always-running mock on `http://127.0.0.1:11435/v1` (the base URL
+field greys out while the toggle is on).
 
 ## Features
 
@@ -123,8 +124,8 @@ itself refuses to run unless the runner hands it `WC_TEST_MEM_FILE` and the app
 confirms it writes exactly that file. It drives **only** the mock LLM and a
 deterministic mock MCP server (`test/mock-mcp-server.js`), never the real
 `mcp.json`, so it is deterministic and needs no GPU and no network.
-To try the same flow by hand, run `./start.sh --mock` and point **Settings → API
-base URL** at `http://127.0.0.1:11435/v1`.
+To try the same flow by hand, run `./start.sh` and flip the **Use built-in mock
+LLM** toggle in Settings (the mock listens on `http://127.0.0.1:11435/v1`).
 
 ## Notes
 
