@@ -295,7 +295,23 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   user-select: none;
   font-weight: 600;
   min-height: 20px; /* comfortable tap target */
+  list-style: none; /* drop the native disclosure triangle, browser-dependent and
+                       un-rotatable, in favour of the Material chevron below */
 }
+.msg-think > summary::-webkit-details-marker { display: none; } /* older WebKit */
+/* Same Material subset as the tool pills. The font-family is set directly here
+   (not via .ic) because the marker lives on the summary itself — safe, since a
+   ::before box holds nothing but the glyph, never the summary's text. */
+.msg-think > summary::before {
+  content: "\f0142"; /* md-chevron_right */
+  font-family: 'wc-icons';
+  display: inline-block;
+  font-size: 1.15em; /* its ink is only 50% of em, same shy grid as md-menu */
+  line-height: 1;
+  margin-right: 5px;
+  transition: transform 0.15s ease;
+}
+.msg-think[open] > summary::before { transform: rotate(90deg); }
 .msg-think[open] > summary { margin-bottom: 6px; }
 .msg-think-text {
   white-space: pre-wrap;
@@ -329,6 +345,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
     background-clip: border-box;
     color: var(--text-dim);
   }
+  .msg-think > summary::before { transition: none; } /* the chevron still turns, just at once */
 }
 
 /* Markdown-rendered assistant replies: HTML structure handles whitespace. */
