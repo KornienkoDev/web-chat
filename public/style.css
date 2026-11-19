@@ -761,10 +761,11 @@ html.dark #btnTheme .ic-sun { display: none; }
   align-items: baseline;
   gap: 6px;
 }
-/* The reply's "process" strip: thinking blocks and tool pills in the order they
+/* The reply's "process" strip: thinking blocks and tool chips in the order they
    happened, stacked vertically above the answer (think → tool → think → …). A
    running tool shimmers with the same band as the "Thinking…" label; a failed
-   one turns red. Tool pills are left-aligned pills; think blocks fill the row. */
+   one turns red. Tool chips copy the think blocks' squared shape and hold their
+   query to one ellipsized line (full text in the tooltip). */
 .msg-process {
   margin: 0 0 8px;
   display: flex;
@@ -805,9 +806,9 @@ html.dark #btnTheme .ic-sun { display: none; }
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  padding: 4px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 8px;               /* squared like .msg-think, not a capsule */
   background: var(--bg-2);
   color: var(--text-dim);
   font-size: 12.5px;
@@ -815,7 +816,15 @@ html.dark #btnTheme .ic-sun { display: none; }
 }
 .msg-tool .ic { flex: none; }
 .msg-tool-name { font-weight: 600; color: var(--text); white-space: nowrap; }
-.msg-tool-arg { color: var(--text-dim); overflow-wrap: anywhere; }
+/* One line only: a long search query must not wrap the chip into a wall of
+   text — the beginning is shown, the rest becomes "…". */
+.msg-tool-arg {
+  color: var(--text-dim);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .msg-tool.is-error {
   border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
   background: var(--surface-danger);

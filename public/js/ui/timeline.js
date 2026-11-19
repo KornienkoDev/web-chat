@@ -71,7 +71,10 @@ function paintTool(chip, s) {
 function thinkNode(step, live) {
   const box = document.createElement('details');
   box.className = 'msg-think';
-  box.open = live; // open only while the model is still writing this block
+  // Collapsed by default — even while the model is still writing it: an
+  // expanded reasoning blob pushes the actual answer off-screen on phones.
+  // The shimmering "Thinking…" label signals the live state; tap opens it.
+  box.open = false;
   const sum = document.createElement('summary');
   const label = document.createElement('span');
   label.textContent = live ? 'Thinking\u2026' : 'Thinking';

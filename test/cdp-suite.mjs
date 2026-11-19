@@ -322,6 +322,47 @@ const badge = await evalJs(`(() => {
 check('mcp usage pill rendered in chat',
   badge.n >= 1 && /searchtest/.test(badge.text) && /search/i.test(badge.text), JSON.stringify(badge));
 
+// Style parity: tool chips share the think block's squared shape, and the
+// query is clamped to one ellipsized line. The compare target is a think block
+// folded from a legacy reasoning-only message (thinking is off at this point).
+const chipStyle = await evalJs(`(() => {
+  const chat = __wc.activeChat();
+  chat.messages.push({ role: 'assistant', content: 'x', reasoning: 'probe', ts: Date.now() });
+  __wc.renderAll();
+  // Re-query AFTER renderAll (it replaces the message DOM) and read the
+  // computed styles while attached — detached elements resolve to ''.
+  const pill = document.querySelector('.msg-tool');
+  const arg = document.querySelector('.msg-tool-arg');
+  const think = document.querySelector('.msg-think');
+  const out = {
+    pill: pill ? getComputedStyle(pill).borderTopLeftRadius : '',
+    think: think ? getComputedStyle(think).borderTopLeftRadius : '',
+    arg: arg ? [getComputedStyle(arg).whiteSpace, getComputedStyle(arg).textOverflow, getComputedStyle(arg).overflowX].join('|') : '',
+    thinkOpen: !!think && think.open,
+  };
+  chat.messages.pop();
+  __wc.renderAll();
+  return out;
+})()`);
+check('tool chips share the think block shape',
+  !!chipStyle.pill && chipStyle.pill === chipStyle.think, JSON.stringify(chipStyle));
+check('tool chip query clamps to one ellipsized line',
+  chipStyle.arg === 'nowrap|ellipsis|hidden', chipStyle.arg);
+check('think blocks render collapsed by default', chipStyle.thinkOpen === false);
+
+// The LIVE path (block the model is still writing) must also start collapsed.
+const liveThink = await evalJs(`(async () => {
+  const tl = await import('/js/ui/timeline.js');
+  const host = document.createElement('div');
+  tl.updateProcess(host, { timeline: [{ kind: 'think', text: 'probe' }] });
+  const d = host.querySelector('.msg-think');
+  const out = d ? { open: d.open, live: d.classList.contains('msg-think-live') } : null;
+  host.remove();
+  return out;
+})()`, true);
+check('live thinking starts collapsed',
+  !!liveThink && liveThink.live && liveThink.open === false, JSON.stringify(liveThink));
+
 // Regression: reasoning streamed after a tool call must open a FRESH think
 // block, not merge into the earlier one — thinking and tools stay interleaved
 // on the timeline (the bug was one growing "Thinking" blob).
