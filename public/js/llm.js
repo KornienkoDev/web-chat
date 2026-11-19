@@ -24,6 +24,33 @@ export async function fetchModels() {
   return state.models;
 }
 
+// MCP bridge: discover the server-managed MCP tools and run one call through
+// the proxy. Discovery failures just mean "no extra tools" — never fatal.
+export async function fetchMcpTools() {
+  try {
+    const res = await fetch('/api/mcp/tools');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    state.mcpTools = Array.isArray(data.tools) ? data.tools : [];
+    if (data.errors && Object.keys(data.errors).length) console.warn('MCP server errors:', data.errors);
+  } catch (e) {
+    state.mcpTools = [];
+    console.warn('MCP tool discovery failed:', e.message);
+  }
+  return state.mcpTools;
+}
+
+export async function callMcpTool(name, args) {
+  const res = await fetch('/api/mcp/call', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, arguments: args }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || `MCP call failed (HTTP ${res.status})`);
+  return String(data.content || '');
+}
+
 // Streams one completion; resolves to { text, reasoning, toolCalls: [{id, name, args}] }.
 // `opts` overrides request fields: temperature, max_tokens, thinking, tools,
 // onReasoning (live callback for the model's thinking tokens).

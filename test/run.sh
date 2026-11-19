@@ -22,6 +22,12 @@ MEM_FILE="$(mktemp -t wc-test-memories.XXXXXX.json)"
 # mktemp leaves the file empty, which the server reads as invalid JSON; seed it
 # so the suite's first GET (the memory-file guard probe) answers properly.
 echo '[]' > "$MEM_FILE"
+# Point the app at the deterministic mock MCP server, never the real mcp.json
+# (that would spawn ddg-search and hit the network during tests).
+MCP_CONF="$(mktemp -t wc-test-mcp.XXXXXX.json)"
+cat > "$MCP_CONF" <<JSON
+{ "mcpServers": { "searchtest": { "command": "node", "args": ["$REPO/test/mock-mcp-server.js"] } } }
+JSON
 # Snapshot of the repo's real memories file for the post-run shield below.
 REAL_MEM="$REPO/memories.json"
 MEM_BACKUP=""
@@ -39,7 +45,7 @@ cleanup() {
   for pid in "${PIDS[@]:-}"; do kill -9 "$pid" 2>/dev/null || true; done
   [ -n "$CHROME_DIR" ] && rm -rf "$CHROME_DIR"
   [ -n "$MEM_BACKUP" ] && rm -f "$MEM_BACKUP"
-  rm -f "$MEM_FILE"
+  rm -f "$MEM_FILE" "$MCP_CONF"
 }
 trap cleanup EXIT
 
@@ -71,8 +77,8 @@ PIDS+=($!)
 wait_for "$MOCK_BASE/models" "mock LLM"
 
 # --- the app, with an isolated memory file so memories.json is never touched ---
-echo "start: app on :$APP_PORT (memory -> $MEM_FILE)"
-PORT="$APP_PORT" WC_MEMORY_FILE="$MEM_FILE" node server.js &
+echo "start: app on :$APP_PORT (memory -> $MEM_FILE, mcp -> $MCP_CONF)"
+PORT="$APP_PORT" WC_MEMORY_FILE="$MEM_FILE" WC_MCP_CONFIG="$MCP_CONF" node server.js &
 PIDS+=($!)
 wait_for "$APP_URL" "app server"
 

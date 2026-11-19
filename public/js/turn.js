@@ -3,7 +3,7 @@
 // model calls save_memory, execute it locally and feed the result back.
 import { state } from './state.js';
 import { saveChats } from './storage.js';
-import { streamCompletion } from './llm.js';
+import { streamCompletion, callMcpTool } from './llm.js';
 import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE } from './memory.js';
 
 // Per-message clock for the model: each history message gets its send time and
@@ -45,6 +45,13 @@ function stampHistory(msgs) {
   });
 }
 
+// Tells small models the search/fetch tools are there for a reason.
+const MCP_TOOL_GUIDANCE =
+  'You also have live tools (such as web search) available right now. Use them whenever ' +
+  'the answer depends on current events, recent information, or any fact you are not ' +
+  'fully sure about — call the tool first, then answer from its result. Do not claim you ' +
+  'cannot browse the web.';
+
 export function buildApiMessages(chat) {
   const ctx = Math.max(2, Number(state.settings.contextMessages) || 20);
   const msgs = [];
@@ -54,6 +61,7 @@ export function buildApiMessages(chat) {
   const mem = memoryBlock();
   if (mem) sysParts.push(mem);
   sysParts.push(MEMORY_TOOL_GUIDANCE);
+  if (state.mcpTools.length) sysParts.push(MCP_TOOL_GUIDANCE);
   sysParts.push('The current date and time is ' + formatTs(Date.now()) +
     '. Chat messages are tagged [sent-at (+gap since the previous message)], so you can ' +
     'tell how much time passed between turns; take that into account when relevant. ' +
@@ -64,14 +72,16 @@ export function buildApiMessages(chat) {
   return msgs;
 }
 
-// One user turn: keep calling the model while it invokes the memory tool,
-// executing tool calls locally and feeding the results back. Max 3 rounds.
+// One user turn: keep calling the model while it invokes tools (save_memory or
+// any MCP tool), executing them locally and feeding the results back. Max 6
+// rounds so a search -> read -> answer chain fits.
 // onReasoning streams the model's thinking tokens for the live collapsible.
 export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, signal) {
   const apiMessages = buildApiMessages(chat);
-  for (let round = 0; round < 3; round++) {
+  const tools = state.mcpTools.length ? [MEMORY_TOOL, ...state.mcpTools] : [MEMORY_TOOL];
+  for (let round = 0; round < 6; round++) {
     const { text, toolCalls } = await streamCompletion(
-      apiMessages, onText, signal, { tools: [MEMORY_TOOL], onReasoning });
+      apiMessages, onText, signal, { tools, onReasoning });
     if (!toolCalls.length) return;
 
     const toolResults = [];
@@ -88,6 +98,14 @@ export async function runChatTurn(chat, asst, onText, onSaved, onReasoning, sign
           tool_call_id: tc.id,
           content: added ? 'Saved.' : fact ? 'Already known.' : 'No fact given.',
         });
+      } else if (state.mcpTools.some((t) => t.function.name === tc.name)) {
+        let out;
+        try {
+          out = await callMcpTool(tc.name, args);
+        } catch (err) {
+          out = `Tool call failed: ${err.message}`;
+        }
+        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: out });
       } else {
         toolResults.push({ role: 'tool', tool_call_id: tc.id, content: 'Unknown tool.' });
       }

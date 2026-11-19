@@ -198,6 +198,16 @@ const md = await evalJs(`(() => {
 })()`);
 check('markdown: list + code block + copy button', md.li >= 3 && md.pre && md.copy, JSON.stringify(md));
 
+// ---------- Section: MCP tools (via test/mock-mcp-server.js) ----------
+// Boot discovery is async and a server may still be starting; poll a bit.
+for (let t = 0; t < 60 && !(await evalJs(`__wc.state.mcpTools.length`)); t++) await sleep(250);
+const mcpNames = await evalJs(`__wc.state.mcpTools.map(t=>t.function.name).join(',')`);
+check('mcp tools discovered', /__search$/.test(mcpNames), mcpNames);
+await evalJs(`__wc.sendMessage('Please search for the meaning of life')`, true);
+const searchReply = await evalJs(`__wc.activeChat().messages.at(-1).content`);
+check('mcp tool call round-trip', /Mockresult Alpha/i.test(searchReply) && /42/.test(searchReply),
+  searchReply.slice(0, 90));
+
 // ---------- Section: regenerate ----------
 const beforeLen = await evalJs(`__wc.activeChat().messages.length`);
 await evalJs(`document.querySelector('.msg-regen').click(); true`);

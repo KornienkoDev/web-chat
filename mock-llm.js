@@ -94,6 +94,25 @@ function streamToolCalls(res, id, facts) {
   if (w.live) res.end();
 }
 
+// Emits a single tool call with streamed JSON args, used for the search
+// emulation below.
+function streamOneToolCall(res, id, name, argsObj) {
+  const w = safeWriter(res);
+  const mk = (delta, finish = null) =>
+    w.write(chunk({ id, object: 'chat.completion.chunk', created: 0, model: 'mock-llm',
+      choices: [{ index: 0, delta, finish_reason: finish }] }));
+  mk({ role: 'assistant' });
+  const args = JSON.stringify(argsObj);
+  mk({ tool_calls: [{ index: 0, id: 'call_mock_search', type: 'function',
+    function: { name, arguments: '' } }] });
+  for (let p = 0; p < args.length; p += 7) {
+    mk({ tool_calls: [{ index: 0, function: { arguments: args.slice(p, p + 7) } }] });
+  }
+  mk({}, 'tool_calls');
+  w.write('data: [DONE]\n\n');
+  if (w.live) res.end();
+}
+
 // Pulls the memory facts the app injects into the system prompt ("## Long-term
 // memory" list) so replies can show that recall reached the model.
 function knownFacts(msgs) {
@@ -154,14 +173,24 @@ const server = http.createServer(async (req, res) => {
     const think = `The user wrote: "${lastUser.slice(0, 60)}". `
       + 'Let me pick a short, friendly reply that also shows I parsed the request. ';
 
+    // 0) MCP search emulation: webchat offers every MCP tool as
+    // "<server>__<tool>". When such a tool is present, a "search for X" ask
+    // calls it — the result then comes back as a tool message for branch 2.
+    const searchTool = (body.tools || []).find((t) => t.function?.name?.endsWith('__search'));
+    let sm;
+    if (searchTool && !afterTool && (sm = lastUser.match(/search for (.+)/i))) {
+      return streamOneToolCall(res, id, searchTool.function.name, { query: sm[1].trim() });
+    }
     // 1) Memory tool: save each durable fact, one tool call each.
     const facts = extractFacts(lastUser);
     if (body.tools?.length && !afterTool && facts.length) {
       return streamToolCalls(res, id, facts);
     }
-    // 2) The model's spoken reply after its tool calls ran.
+    // 2) The model's spoken reply after its tool calls ran; echo the tool
+    // output so tests can prove results round-tripped through the executor.
     if (afterTool) {
-      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)})`, undefined, thinking ? think : '');
+      const toolOut = msgs.filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' | ');
+      return streamText(res, id, `Noted! (mock reply to: ${lastUser.slice(0, 60)}) ${toolOut.slice(0, 120)}`, undefined, thinking ? think : '');
     }
     // 3) Counting: a long, interruptible stream for the Stop button.
     let m;

@@ -7,6 +7,7 @@ const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const mcp = require('./mcp.js');
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -67,6 +68,8 @@ const server = http.createServer((req, res) => {
     if (req.method === 'PUT' || req.method === 'POST') return handlePutMemory(req, res);
     return send(res, 405, 'Method not allowed');
   }
+  if (url.pathname === '/api/mcp/tools' && req.method === 'GET') return handleMcpTools(res);
+  if (url.pathname === '/api/mcp/call' && req.method === 'POST') return handleMcpCall(req, res);
   if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
   send(res, 405, 'Method not allowed');
 });
@@ -229,6 +232,36 @@ async function handleApiModels(req, res) {
   }
 }
 
+// ---------- MCP tools ----------
+// The browser asks for the tool list to attach to chat requests and posts
+// tool calls back here; mcp.js owns the server processes. A broken server
+// only removes its own tools (errors map) — the chat keeps working.
+async function handleMcpTools(res) {
+  try {
+    sendJson(res, 200, await mcp.listTools());
+  } catch (e) {
+    sendJson(res, 500, { error: `MCP discovery failed: ${e.message}` });
+  }
+}
+
+async function handleMcpCall(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req, 256 * 1024);
+  } catch {
+    return sendJson(res, 400, { error: 'Invalid JSON body.' });
+  }
+  if (typeof body.name !== 'string' || !body.name) {
+    return sendJson(res, 400, { error: 'name is required.' });
+  }
+  try {
+    const content = await mcp.callTool(body.name, body.arguments);
+    sendJson(res, 200, { ok: true, content });
+  } catch (e) {
+    sendJson(res, 502, { ok: false, error: e.message });
+  }
+}
+
 // ---------- Memory file ----------
 // Accepts either a bare array or { memory: [...] } and returns a clean list,
 // or null when the shape is wrong. Each fact keeps its id, text and source so
@@ -287,4 +320,10 @@ async function handlePutMemory(req, res) {
 
 server.listen(PORT, () => {
   console.log(`Local web chat running at http://localhost:${PORT}`);
+  console.log(`MCP config: ${mcp.CONFIG_FILE}`);
 });
+
+// MCP children must die with the app, even on Ctrl+C or a service stop.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { mcp.shutdown(); process.exit(0); });
+}

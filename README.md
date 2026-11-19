@@ -45,6 +45,12 @@ URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
   exists for models without tool support.
 - **Streaming** responses (SSE) with a Stop button that aborts upstream
   generation too.
+- **MCP tools** — the model can search the web and read pages mid-conversation
+  via [Model Context Protocol](https://modelcontextprotocol.io) servers: out of
+  the box `ddg-search` (DuckDuckGo search/fetch, needs `uvx`). Servers are
+  declared in `mcp.json`, spawned lazily as local stdio subprocesses, and each
+  tool is offered to the model as `server__tool`; results are fed back in an
+  agentic loop. A server that fails to start only loses its own tools.
 - **Mobile-first responsive UI** — drawer sidebar on phones, safe-area aware,
   16 px inputs (no iOS zoom), touch targets ≥ 40 px.
 - Markdown rendering (XSS-safe, own mini-renderer) with copy buttons on code
@@ -61,6 +67,9 @@ URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
 start.sh               launcher: app + optional mock LLM, one Ctrl+C stops both
 server.js              static file server + localhost-only LLM proxy (streams SSE)
                        + /api/memory JSON-file storage for memories
+                       + /api/mcp/{tools,call} bridge for MCP servers
+mcp.json               MCP server definitions: {"mcpServers": {name: {command, args, env}}}
+mcp.js                 zero-dep MCP stdio client: spawn, JSON-RPC, tool registry
 public/
   index.html, style.css
   js/
@@ -69,7 +78,8 @@ public/
     state.js           single app state + defaults
     storage.js         the ONLY place that touches localStorage
     chats.js           chat CRUD (persists + emits events)
-    llm.js             transport: /api/chat streaming, /api/models discovery
+    llm.js             transport: /api/chat streaming, /api/models + /api/mcp
+                       discovery, MCP tool calls
     memory.js          memory domain: dedup, save_memory tool, extractors
     turn.js            one user turn: prompt assembly + agentic tool loop
     session.js         send-flow service (stream, stop, errors) — UI hooks injected
@@ -78,6 +88,7 @@ public/
                        memoryPanel, markdown (pure view layer)
 test/
   cdp-suite.mjs        end-to-end browser suite via Chrome DevTools Protocol
+  mock-mcp-server.js   deterministic MCP stdio server used by the suite
   smoke-mock.sh        curl smoke test for mock-llm.js
 mock-llm.js            OpenAI-compatible fake server for testing without a GPU
 ```
@@ -97,8 +108,9 @@ APP_PORT=3100 MOCK_PORT=11436 ./test/run.sh   # free ports while a dev instance 
 port already answers, because the suite wipes the server's memory file as its
 first step. That memory always goes to a throwaway temp file — and the suite
 itself refuses to run unless the runner hands it `WC_TEST_MEM_FILE` and the app
-confirms it writes exactly that file. It drives **only** the mock LLM, so it is
-deterministic and needs no GPU.
+confirms it writes exactly that file. It drives **only** the mock LLM and a
+deterministic mock MCP server (`test/mock-mcp-server.js`), never the real
+`mcp.json`, so it is deterministic and needs no GPU and no network.
 To try the same flow by hand, run `./start.sh --mock` and point **Settings → API
 base URL** at `http://127.0.0.1:11435/v1`.
 
@@ -111,3 +123,10 @@ base URL** at `http://127.0.0.1:11435/v1`.
   be edited while the app is stopped; the Memory panel shows its full path.
 - The proxy rejects non-local targets, so the page can never be tricked into
   hitting arbitrary URLs.
+- **MCP:** `mcp.json` next to `server.js` declares stdio MCP servers
+  (`command`, `args`, optional `env`). Override the path with `WC_MCP_CONFIG`;
+  an empty `mcpServers` disables the feature. The shipped `ddg-search` entry
+  runs `uvx duckduckgo-mcp-server` (install [uv](https://docs.astral.sh/uv/)
+  for it), which gives the model `search`, `fetch_content` and `expand_link`.
+  Whatever the model searches is visible in the conversation. Treat `mcp.json`
+  like `server.js` itself: only define servers you chose to run.

@@ -3,7 +3,7 @@
 import { state } from './state.js';
 import { loadSettings, loadChats, loadMemory, saveSettings } from './storage.js';
 import { activeChat, newChat, openChat, mostRecentChatId } from './chats.js';
-import { fetchModels } from './llm.js';
+import { fetchModels, fetchMcpTools } from './llm.js';
 import { sendMessage, stopStreaming, regenerate, initSession } from './session.js';
 import { addMemory, deleteMemory } from './memory.js';
 import { on } from './events.js';
@@ -68,6 +68,9 @@ function boot() {
   });
 
   fetchModels();
+  // MCP servers may take seconds to boot (uvx cold start); don't block the UI,
+  // the next turn just picks the tools up when they arrive.
+  fetchMcpTools();
 
   window.__wc = {
     state, $, activeChat, newChat, openChat, sendMessage, stopStreaming, regenerate,

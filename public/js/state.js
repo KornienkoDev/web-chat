@@ -21,6 +21,7 @@ export const state = {
   memory: [], // [{id, text, createdAt, source: 'manual'|'auto'|'tool'}]
   memoryFile: '', // path of the server-side JSON file, once known
   extracting: false,
+  mcpTools: [], // OpenAI function shape from /api/mcp/tools: [{type, function: {...}}]
 };
 
 export function uid() {
