@@ -4,12 +4,27 @@
 // Chats persist in localStorage so history survives reloads and restarts.
 const LS_CHATS = 'wc.chats';
 const LS_ACTIVE = 'wc.active';
+const LS_SETTINGS = 'wc.settings';
+
+const DEFAULT_SETTINGS = {
+  baseUrl: 'http://127.0.0.1:8081/v1',
+  apiKey: '',
+  model: '',
+  temperature: '',
+  maxTokens: '1024',
+  contextMessages: '20',
+  system: '',
+  thinking: 'default',
+};
 
 const state = {
   chats: new Map(), // id -> { id, title, createdAt, updatedAt, messages: [{role, content}] }
   activeId: null,
   streaming: false,
   search: '',
+  settings: { ...DEFAULT_SETTINGS },
+  models: [],
+  controller: null,
 };
 
 function uid() {
@@ -38,6 +53,17 @@ function saveState() {
   } catch (e) {
     showWarning('Browser storage is full — the oldest chats may not be saved. Delete some to free space.');
   }
+}
+
+function loadSettings() {
+  try {
+    Object.assign(state.settings, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}'));
+  } catch (e) {
+    state.settings = { ...DEFAULT_SETTINGS };
+  }
+}
+function saveSettings() {
+  localStorage.setItem(LS_SETTINGS, JSON.stringify(state.settings));
 }
 
 function mostRecentChatId() {
@@ -196,6 +222,88 @@ function scrollToBottom() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+// ---------- LLM connection ----------
+function currentModel() {
+  return state.settings.model || state.models[0] || '';
+}
+
+function buildApiMessages(chat) {
+  const ctx = Math.max(2, Number(state.settings.contextMessages) || 20);
+  const msgs = [];
+  const sys = state.settings.system.trim();
+  if (sys) msgs.push({ role: 'system', content: sys });
+  msgs.push(...chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx));
+  return msgs;
+}
+
+// Streams a chat completion from the local server, calling onDelta for text chunks.
+async function streamChat(chat, onDelta, signal) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      base: state.settings.baseUrl,
+      apiKey: state.settings.apiKey,
+      model: currentModel(),
+      temperature: state.settings.temperature,
+      max_tokens: state.settings.maxTokens,
+      thinking: state.settings.thinking,
+      messages: buildApiMessages(chat),
+    }),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    let detail = '';
+    try { detail = (await res.json()).error || ''; } catch {}
+    throw new Error(detail || `Server returned HTTP ${res.status}`);
+  }
+
+  // Parse OpenAI-style SSE: "data: {json}" lines, comments like ": keep-alive" skipped.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') continue;
+      let obj;
+      try { obj = JSON.parse(payload); } catch { continue; }
+      if (obj.error) throw new Error(obj.error.message || 'LLM error');
+      const delta = obj.choices?.[0]?.delta?.content;
+      if (delta) { text += delta; onDelta(delta); }
+    }
+  }
+  return text;
+}
+
+async function fetchModels() {
+  try {
+    const res = await fetch(`/api/models?base=${encodeURIComponent(state.settings.baseUrl)}`, {
+      headers: state.settings.apiKey ? { 'X-Upstream-Key': state.settings.apiKey } : {},
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    state.models = (data.data || []).map((m) => m.id).filter(Boolean);
+  } catch (e) {
+    state.models = [];
+    console.warn('Model discovery failed:', e.message);
+  }
+  renderModelLabel();
+  return state.models;
+}
+
+function renderModelLabel() {
+  modelLabelEl.textContent = currentModel() || 'no model — check Settings';
+}
+
 // ---------- Sending ----------
 async function sendMessage() {
   const text = input.value.trim();
@@ -204,15 +312,34 @@ async function sendMessage() {
   const chat = activeChat() || newChat();
   chat.messages.push({ role: 'user', content: text });
   if (chat.title === 'New chat') chat.title = text.slice(0, 40);
-  touchChat(chat);
   input.value = '';
   autoGrow();
   renderAll();
 
-  // Placeholder reply until the LLM connection is wired up.
   setStreaming(true);
-  await new Promise((r) => setTimeout(r, 300));
-  chat.messages.push({ role: 'assistant', content: `Echo: ${text}` });
+  state.controller = new AbortController();
+  const asst = { role: 'assistant', content: '' };
+  chat.messages.push(asst);
+  const el = renderMessage(asst);
+  messagesEl.appendChild(el);
+  scrollToBottom();
+
+  try {
+    await streamChat(chat, (delta) => {
+      asst.content += delta;
+      el.textContent = asst.content;
+      if (atBottom()) scrollToBottom();
+    }, state.controller.signal);
+    if (!asst.content) asst.content = '(empty response)';
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      if (!asst.content) chat.messages.pop();
+    } else {
+      chat.messages.pop();
+      chat.messages.push({ role: 'error', content: e.message });
+    }
+  }
+  state.controller = null;
   touchChat(chat);
   setStreaming(false);
   renderAll();
@@ -225,6 +352,7 @@ function setStreaming(on) {
 }
 
 btnSend.addEventListener('click', sendMessage);
+btnStop.addEventListener('click', () => state.controller?.abort());
 
 input.addEventListener('keydown', (e) => {
   // Enter sends, Shift+Enter inserts a newline.
@@ -241,6 +369,80 @@ function autoGrow() {
 }
 input.addEventListener('input', autoGrow);
 
+// ---------- Settings dialog ----------
+const settingsDialog = $('settingsDialog');
+const settingsForm = $('settingsForm');
+const settingsMsg = $('settingsMsg');
+
+function readSettingsForm() {
+  return {
+    baseUrl: $('setBaseUrl').value.trim(),
+    apiKey: $('setApiKey').value.trim(),
+    model: $('setModel').value.trim(),
+    temperature: $('setTemp').value.trim(),
+    maxTokens: $('setMaxTokens').value.trim(),
+    contextMessages: $('setContext').value.trim(),
+    system: $('setSystem').value,
+    thinking: $('setThinking').value,
+  };
+}
+
+function fillSettingsForm() {
+  const s = state.settings;
+  $('setBaseUrl').value = s.baseUrl;
+  $('setApiKey').value = s.apiKey;
+  $('setModel').value = s.model;
+  $('setTemp').value = s.temperature;
+  $('setMaxTokens').value = s.maxTokens;
+  $('setContext').value = s.contextMessages;
+  $('setSystem').value = s.system;
+  $('setThinking').value = s.thinking;
+  fillModelList();
+}
+
+function fillModelList() {
+  const list = $('modelList');
+  list.innerHTML = '';
+  for (const id of state.models) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    list.appendChild(opt);
+  }
+}
+
+$('btnSettings').addEventListener('click', () => {
+  fillSettingsForm();
+  settingsMsg.textContent = '';
+  settingsDialog.showModal();
+  fetchModels().then(fillModelList);
+});
+
+settingsForm.addEventListener('submit', (e) => {
+  if (e.submitter?.value !== 'save') return;
+  Object.assign(state.settings, readSettingsForm());
+  saveSettings();
+  renderModelLabel();
+});
+
+// Storage is the source of truth: after closing, reset any unsaved edits.
+settingsDialog.addEventListener('close', () => {
+  loadSettings();
+  renderModelLabel();
+});
+
+$('btnTestConn').addEventListener('click', async () => {
+  settingsMsg.textContent = 'Testing…';
+  Object.assign(state.settings, readSettingsForm());
+  const models = await fetchModels();
+  settingsMsg.textContent = models.length
+    ? `OK — ${models.length} model(s) available`
+    : 'Cannot reach the server. Check the base URL above.';
+  fillModelList();
+});
+
 // ---------- Boot ----------
+loadSettings();
 loadState();
+renderModelLabel();
+fetchModels();
 if (!state.activeId) newChat({ focus: false }); else renderAll();

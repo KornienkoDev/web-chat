@@ -45,11 +45,38 @@
 
   <!-- Settings dialog -->
   <dialog id="settingsDialog" class="dialog">
-    <form method="dialog" class="dialog-body">
+    <form method="dialog" id="settingsForm" class="dialog-body">
       <h2>Settings</h2>
-      <p class="muted">Not configured yet.</p>
+      <label class="field"><span>API base URL (OpenAI-compatible)</span>
+        <input id="setBaseUrl" type="url" placeholder="http://127.0.0.1:8081/v1"></label>
+      <label class="field"><span>API key (optional)</span>
+        <input id="setApiKey" type="password" autocomplete="off"></label>
+      <label class="field"><span>Model</span>
+        <input id="setModel" list="modelList" placeholder="leave empty to use the first served model" autocomplete="off">
+        <datalist id="modelList"></datalist></label>
+      <div class="field-row">
+        <label class="field"><span>Temperature</span>
+          <input id="setTemp" type="number" step="0.1" min="0" max="2" placeholder="server default"></label>
+        <label class="field"><span>Max tokens</span>
+          <input id="setMaxTokens" type="number" min="1" placeholder="1024"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Last messages to send</span>
+          <input id="setContext" type="number" min="2" max="200" placeholder="20"></label>
+        <label class="field"><span>Extended thinking</span>
+          <select id="setThinking">
+            <option value="default">Server default</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select></label>
+      </div>
+      <label class="field"><span>System prompt</span>
+        <textarea id="setSystem" rows="3" placeholder="Optional"></textarea></label>
+      <p id="settingsMsg" class="muted"></p>
       <div class="dialog-actions">
-        <button class="btn btn-primary">Close</button>
+        <button type="button" id="btnTestConn" class="btn btn-ghost">Test connection</button>
+        <button value="cancel" class="btn btn-ghost">Cancel</button>
+        <button value="save" class="btn btn-primary">Save</button>
       </div>
     </form>
   </dialog>
