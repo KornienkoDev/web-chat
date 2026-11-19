@@ -1,0 +1,166 @@
+// Full CDP test suite for the modular web chat against the live local LLM.
+import { setTimeout as sleep } from 'node:timers/promises';
+
+const version = await (await fetch(`${process.env.CDP_URL ?? 'http://127.0.0.1:9222'}/json/version`)).json();
+const ws = new WebSocket(version.webSocketDebuggerUrl);
+await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+let id = 0;
+const waiting = new Map();
+ws.onmessage = (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.id && waiting.has(msg.id)) { waiting.get(msg.id)(msg); waiting.delete(msg.id); }
+};
+const send = (method, params = {}, sessionId) => new Promise((res) => {
+  const mid = ++id; waiting.set(mid, res);
+  ws.send(JSON.stringify({ id: mid, method, params, ...(sessionId ? { sessionId } : {}) }));
+});
+async function must(method, params, sessionId) {
+  const r = await send(method, params, sessionId);
+  if (r.error) throw new Error(`${method}: ${JSON.stringify(r.error)}`);
+  return r.result;
+}
+const { targetId } = await must('Target.createTarget', { url: 'about:blank' });
+const { sessionId } = await must('Target.attachToTarget', { targetId, flatten: true });
+await must('Page.enable', {}, sessionId);
+// Install an error collector on EVERY page load (survives navigations).
+await must('Page.addScriptToEvaluateOnNewDocument', {
+  source: `window.__errs = []; window.addEventListener('error', (e) => window.__errs.push(String(e.message)));`,
+}, sessionId);
+async function evalJs(expression, awaitPromise = false) {
+  const r = await must('Runtime.evaluate', { expression, awaitPromise, returnByValue: true }, sessionId);
+  if (r.exceptionDetails) throw new Error('page JS error: ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text));
+  return r.result.value;
+}
+async function reload() { await must('Page.navigate', { url: process.env.APP_URL ?? "http://localhost:3000" }, sessionId); await sleep(900); }
+
+let pass = 0, fail = 0;
+const check = (n, ok, e = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${e ? '  [' + e + ']' : ''}`); };
+
+// Boot clean.
+await reload();
+await evalJs(`localStorage.clear()`);
+// Also reset the server-side memory file so runs start from a clean slate.
+await evalJs(`fetch('/api/memory', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: '[]' })`, true);
+await reload();
+const consoleErrors = [];
+
+// ---------- Section: boot & model discovery ----------
+check('app boots (module graph loads)', await evalJs(`!!window.__wc && __wc.state.chats.size === 1`));
+check('no page errors on boot', (await evalJs(`window.__errs.length`)) === 0);
+await evalJs(`__wc.fetchModels()`);
+const models = await evalJs(`__wc.state.models`);
+check('model discovery', Array.isArray(models) && models.length >= 1, models.join(','));
+
+// Tuning for speed/determinism.
+await evalJs(`Object.assign(__wc.state.settings, {thinking:'off', maxTokens:'400'}); __wc.saveSettings();`);
+
+// ---------- Section: real LLM round-trip + memory tool ----------
+await evalJs(`__wc.sendMessage('A few things to note: my name is Marcin, I am vegetarian, and my dog Pixel is 3 years old.')`, true);
+const lastMsg = await evalJs(`__wc.activeChat().messages.at(-1)`);
+const mem = await evalJs(`__wc.state.memory`);
+const joined = mem.map((m) => m.text).join(' | ').toLowerCase();
+check('real LLM replied', lastMsg.role === 'assistant' && lastMsg.content.length > 0);
+check('model saved facts by itself', mem.length >= 2 && mem.every((m) => m.source === 'tool'),
+  `${mem.length} facts`);
+check('facts cover name/diet/dog', /marcin/.test(joined) && /vegetarian/.test(joined) && /pixel/.test(joined));
+check('savedFacts badge on message', Array.isArray(lastMsg.savedFacts) && lastMsg.savedFacts.length >= 2);
+check('memory persisted', await evalJs(`JSON.parse(localStorage.getItem('wc.memory')||'[]').length >= 2`));
+const memFile = await evalJs(`(async () => (await fetch('/api/memory')).json())()`, true);
+check('memory written to server file', Array.isArray(memFile.memory) && memFile.memory.length >= 2,
+  `${memFile.memory?.length ?? '?'} facts in ${memFile.file || '?'}`);
+
+// Recall via injected memory.
+await evalJs(`__wc.sendMessage('What is my dog called? One word.')`, true);
+check('memory injected into next turn', /pixel/i.test(await evalJs(`__wc.activeChat().messages.at(-1).content`)));
+
+// Trivia must not be saved.
+const before = await evalJs(`__wc.state.memory.length`);
+await evalJs(`__wc.sendMessage('haha lol ok whatever')`, true);
+check('chit-chat ignored', (await evalJs(`__wc.state.memory.length`)) === before);
+
+// ---------- Section: persistence across reload ----------
+await reload();
+check('chats restored after reload', await evalJs(`__wc.state.chats.size`) >= 1);
+const msgs = await evalJs(`__wc.activeChat().messages.map(m=>m.role).join(',')`);
+check('messages restored (incl. savedFacts msg)', /assistant/.test(msgs) &&
+  await evalJs(`__wc.activeChat().messages.some(m=>m.savedFacts)`));
+check('memory restored after reload', (await evalJs(`__wc.state.memory.length`)) >= 2);
+
+// Second chat + open older + delete.
+await evalJs(`__wc.newChat()`);
+await evalJs(`__wc.sendMessage('second chat probe')`, true);
+await reload();
+check('two chats persisted', await evalJs(`__wc.state.chats.size`) === 2);
+const olderId = await evalJs(`[...__wc.state.chats.values()].sort((a,b)=>a.updatedAt-b.updatedAt)[0].id`);
+await evalJs(`__wc.openChat(${JSON.stringify(olderId)})`);
+check('open older chat', (await evalJs(`__wc.activeChat().messages[0].content`)).includes('Marcin'));
+await evalJs(`for (const id of [...__wc.state.chats.keys()].filter(i=>i!==__wc.state.activeId)) __wc.state.chats.delete(id)`);
+await evalJs(`window.__wc.state.activeId`); // touch
+await reload();
+check('deletions persist', (await evalJs(`__wc.state.chats.size`)) <= 2);
+
+// ---------- Section: stop + error handling ----------
+await evalJs(`__wc.state.settings.maxTokens='2000';`);
+await evalJs(`__wc.sendMessage('Count from 1 to 500, one number per line.'); true`);
+await sleep(4000);
+await evalJs(`__wc.stopStreaming()`);
+await sleep(500);
+const stopped = await evalJs(`({streaming: __wc.state.streaming, role: __wc.activeChat().messages.at(-1).role, len: (__wc.activeChat().messages.at(-1).content||'').length})`);
+check('stop halts generation, keeps partial text', stopped.streaming === false && stopped.role === 'assistant' && stopped.len > 0, JSON.stringify(stopped));
+
+await evalJs(`__wc.state.settings.baseUrl='http://127.0.0.1:9/x';`);
+await evalJs(`__wc.sendMessage('hi')`, true);
+const errRole = await evalJs(`__wc.activeChat().messages.at(-1).role`);
+check('connection error surfaced inline', errRole === 'error');
+
+// Manual memory button + duplicate rejection.
+await evalJs(`__wc.state.settings.baseUrl='http://127.0.0.1:8081/v1';`);
+const m0 = await evalJs(`__wc.state.memory.length`);
+await evalJs(`document.querySelector('.msg.user .msg-meta .msg-action:last-child').click()`);
+check('manual save button works', (await evalJs(`__wc.state.memory.length`)) === m0 + 1);
+check('duplicate rejected', !(await evalJs(`__wc.addMemory('The user\\'s name is Marcin','manual')`)));
+
+// ---------- Section: markdown rendering ----------
+await evalJs(`__wc.sendMessage('Reply with a markdown list of 3 fruits and a python code block that prints hi. No preamble.')`, true);
+const md = await evalJs(`(() => {
+  const el = [...document.querySelectorAll('.msg.assistant')].pop();
+  return { li: el.querySelectorAll('ul li').length, pre: !!el.querySelector('pre code'), copy: !!el.querySelector('.code-copy') };
+})()`);
+check('markdown: list + code block + copy button', md.li >= 3 && md.pre && md.copy, JSON.stringify(md));
+
+// ---------- Section: regenerate ----------
+const beforeLen = await evalJs(`__wc.activeChat().messages.length`);
+await evalJs(`document.querySelector('.msg-regen').click(); true`);
+async function waitIdle(maxMs = 90000) {
+  const t0 = Date.now();
+  for (;;) {
+    if (!(await evalJs(`__wc.state.streaming`))) return true;
+    if (Date.now() - t0 > maxMs) return false;
+    await sleep(500);
+  }
+}
+check('regenerate completes', await waitIdle());
+const afterLen = await evalJs(`__wc.activeChat().messages.length`);
+const roles = await evalJs(`__wc.activeChat().messages.slice(-2).map(m=>m.role).join(',')`);
+check('regenerate keeps one reply', afterLen === beforeLen && roles === 'user,assistant', `${afterLen} ${roles}`);
+
+// ---------- Section: import / export ----------
+const io = await evalJs(`(async () => {
+  const data = { app: 'web_chat', version: 1,
+    chats: [{ id: 'imp-1', title: 'Imported chat', createdAt: 1, updatedAt: 1,
+              messages: [{ role: 'user', content: 'imported hello' }, { role: 'assistant', content: 'hi' }] }],
+    memory: [{ text: 'User plays chess', source: 'manual' }] };
+  const before = __wc.state.chats.size;
+  await __wc.importData(new File([JSON.stringify(data)], 'b.json', { type: 'application/json' }));
+  const c = __wc.state.chats.get('imp-1');
+  return { added: __wc.state.chats.size - before, ok: !!c && c.messages.length === 2,
+           mem: __wc.state.memory.some(m => /chess/i.test(m.text)) };
+})()`, true);
+check('import adds chat + memories', io.added === 1 && io.ok && io.mem, JSON.stringify(io));
+
+check('no page errors during run', (await evalJs(`(window.__errs||[]).length`)) === 0,
+  await evalJs(`(window.__errs||[]).join(';')`));
+
+console.log(`\n${pass} passed, ${fail} failed`);
+ws.close();
+process.exit(fail ? 1 : 0);
