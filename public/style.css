@@ -50,6 +50,13 @@
   --radius: 12px;
   --sidebar-w: 300px;
   --topbar-h: 52px;
+  /* ChatGPT-style reading column: messages and composer are capped at this
+     width and centred. The gutter is padding, not a max-width on the scroll
+     box, so the scrollbar stays at the window edge and the composer's
+     top border still spans the full width. 100% resolves per element, which
+     is why this is a var rather than a fixed value. */
+  --chat-w: 768px;
+  --chat-gutter: max(12px, calc((100% - var(--chat-w)) / 2));
   color-scheme: light;
 }
 
@@ -183,7 +190,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 12px;
+  padding: 16px var(--chat-gutter);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -191,7 +198,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 }
 
 .msg {
-  max-width: min(760px, 100%);
+  max-width: 100%;
   width: fit-content;
   padding: 10px 14px;
   border-radius: var(--radius);
@@ -291,7 +298,7 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px var(--chat-gutter);
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--bg-2);
@@ -545,6 +552,9 @@ html.dark #btnTheme .i-moon { display: none; }
   .sidebar-foot { padding-bottom: 12px; }
   .backdrop { display: none; }
   #btnMenu { display: none; }
-  .messages { padding: 20px 24px; }
-  .composer { padding: 14px 24px; padding-bottom: 14px; }
+  /* roomier minimum gutter once we are past phone widths; the 768px column
+     itself only starts centring once there is actually room for it */
+  :root { --chat-gutter: max(24px, calc((100% - var(--chat-w)) / 2)); }
+  .messages { padding: 20px var(--chat-gutter); }
+  .composer { padding: 14px var(--chat-gutter); padding-bottom: 14px; }
 }
