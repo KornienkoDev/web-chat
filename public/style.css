@@ -265,8 +265,19 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .msg .msg-meta {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 4px;
+}
+/* Send time sits at the edge opposite the action buttons; hover shows the
+   full date and time. */
+.msg-time {
+  margin-right: auto;
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--text-dim);
+  user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Markdown-rendered assistant replies: HTML structure handles whitespace. */

@@ -69,6 +69,18 @@ export function renderMessages() {
   scrollToBottom();
 }
 
+// Human-friendly send time: "13:34" today, "Nov 16, 13:34" this year, with the
+// year when older. Hovering shows the full system timestamp.
+function formatMsgTime(ms) {
+  const d = new Date(ms);
+  const now = new Date();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return time;
+  const opts = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return `${d.toLocaleDateString([], opts)}, ${time}`;
+}
+
 export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}${md ? ' md' : ''}`;
@@ -81,6 +93,13 @@ export function renderMessage(m, { md = false, canRegenerate = false } = {}) {
   if (m.role === 'user' || m.role === 'assistant') {
     const meta = document.createElement('div');
     meta.className = 'msg-meta';
+    if (m.ts) {
+      const time = document.createElement('span');
+      time.className = 'msg-time';
+      time.textContent = formatMsgTime(m.ts);
+      time.title = new Date(m.ts).toLocaleString();
+      meta.appendChild(time);
+    }
     if (canRegenerate) {
       const regen = document.createElement('button');
       regen.className = 'msg-action msg-regen ic ic-reload';
