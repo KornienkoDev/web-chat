@@ -7,8 +7,14 @@ machine and the conversation never leaves it.
 ## Quick start
 
 ```bash
-node server.js                 # serves the UI on http://localhost:3000
+./start.sh                     # serves the UI on http://localhost:3000
+./start.sh --mock              # …plus the built-in mock LLM — no GPU or real model needed
 ```
+
+`start.sh` is the only entry point you need: it runs `node server.js`, waits for
+the mock to answer when you pass `--mock`, and stops both on Ctrl+C. It needs
+nothing beyond Node; `--help` prints the supported environment variables
+(`PORT`, `MOCK_PORT`, `WC_MEMORY_FILE`, `WC_ALLOW_LAN`).
 
 Open <http://localhost:3000>. By default the app talks to an OpenAI-compatible
 server at `http://127.0.0.1:8081/v1` (e.g. llama.cpp's `llama-server`).
@@ -16,6 +22,9 @@ Everything is configurable in **Settings** (works with llama.cpp, vLLM, LM
 Studio, Ollama `…/v1`, …): API base URL, API key, model (auto-discovered from
 `/models`), temperature, max tokens, context size, system prompt and a
 thinking-mode toggle for Qwen-style models.
+
+No model running yet? Start `./start.sh --mock` and point **Settings → API base
+URL** at `http://127.0.0.1:11435/v1` to click through the whole UI.
 
 ## Features
 
@@ -47,6 +56,7 @@ thinking-mode toggle for Qwen-style models.
 ## Architecture
 
 ```
+start.sh               launcher: app + optional mock LLM, one Ctrl+C stops both
 server.js              static file server + localhost-only LLM proxy (streams SSE)
                        + /api/memory JSON-file storage for memories
 public/
@@ -76,15 +86,15 @@ mock-llm.js            OpenAI-compatible fake server for testing without a GPU
 # 1) mock LLM smoke test (no browser):
 bash test/smoke-mock.sh
 
-# 2) full browser suite (needs Chromium + app + a reachable LLM):
+# 2) full browser suite (needs Chromium + app + mock LLM):
 chromium --headless=new --no-sandbox --remote-debugging-port=9222 about:blank &
-node server.js &
-node test/cdp-suite.mjs        # CDP_URL / APP_URL env vars supported
+./start.sh --mock &            # app on :3000 and the mock LLM on :11435
+node test/cdp-suite.mjs        # CDP_URL / APP_URL / MOCK_BASE env vars supported
 ```
 
-Point **Settings → API base URL** at `http://127.0.0.1:11435/v1` after
-`node mock-llm.js` to try the whole UI (including the memory tool flow)
-without a real model.
+The suite drives **only** the mock LLM, so it is deterministic and needs no GPU.
+To try the same flow by hand, run `./start.sh --mock` and point **Settings → API
+base URL** at `http://127.0.0.1:11435/v1`.
 
 ## Notes
 
