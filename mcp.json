@@ -2,7 +2,10 @@
   "mcpServers": {
     "ddg-search": {
       "command": "uvx",
-      "args": ["duckduckgo-mcp-server"]
+      "args": ["duckduckgo-mcp-server==0.7.0"],
+      "env": {
+        "PYTHONWARNINGS": "ignore::mcp.shared.exceptions.MCPDeprecationWarning"
+      }
     }
   }
 }
