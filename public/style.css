@@ -466,13 +466,13 @@ html.dark #btnTheme .ic-moon { display: block; }
 html.dark #btnTheme .ic-sun { display: none; }
 
 /* The send key doubles as stop, so its glyph changes with its role. It floats
-   inside the textarea's bottom-right corner: on one line it sits centred
-   (6px margin all round), on many it stays anchored to the bottom, like
-   ChatGPT's. 30px keeps it clear of the 12px text gutter. */
+   inside the textarea's right edge, centred vertically no matter how tall the
+   field grows. 30px keeps it clear of the 12px text gutter. */
 .send-btn {
   position: absolute;
   right: 6px;
-  bottom: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 30px;
   height: 30px;
   border-radius: 999px;
@@ -488,8 +488,9 @@ html.dark #btnTheme .ic-sun { display: none; }
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 /* the send key's stop role while a reply streams */
 .send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
-/* md-stop's square is symmetric and centres itself — undo the plane's nudge. */
-.send-btn.stop-mode::before { content: "\f04db"; transform: none; }
+/* md-stop's square is symmetric and centres itself — undo the plane's nudge.
+   Its ink is small inside the box, so it gets a size bump to fill the badge. */
+.send-btn.stop-mode::before { content: "\f04db"; transform: none; font-size: 1.2em; }
 
 .btn {
   min-height: 40px; /* comfortable touch targets */
