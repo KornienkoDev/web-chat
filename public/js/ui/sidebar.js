@@ -4,6 +4,7 @@ import { openChat, renameChat, deleteChat, newChat } from '../chats.js';
 import { on } from '../events.js';
 import { $ } from './dom.js';
 import { confirmDialog } from './modal.js';
+import { focusInput } from './composer.js';
 
 let sidebarEl, backdropEl, chatListEl, chatSearchEl;
 let renaming = null; // { cancel() } for the row whose title is being edited
@@ -16,7 +17,12 @@ export function initSidebar() {
 
   $('btnMenu').addEventListener('click', openSidebar);
   backdropEl.addEventListener('click', closeSidebar);
-  $('btnNewChat').addEventListener('click', () => { newChat(); closeSidebar(); });
+  $('btnNewChat').addEventListener('click', () => {
+    newChat();
+    closeSidebar();
+    // The new chat should be ready to type into right away.
+    focusInput();
+  });
   chatSearchEl.addEventListener('input', () => {
     state.search = chatSearchEl.value;
     renderChatList();

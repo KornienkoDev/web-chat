@@ -29,6 +29,10 @@ export function clearInput() {
   autoGrow();
 }
 
+export function focusInput() {
+  input.focus();
+}
+
 export function setStreamingUI(on) {
   streaming = on;
   // The same key sends or halts: one class flips its glyph, colour and label.
