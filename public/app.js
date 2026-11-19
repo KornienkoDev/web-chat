@@ -5,6 +5,10 @@
 const LS_CHATS = 'wc.chats';
 const LS_ACTIVE = 'wc.active';
 const LS_SETTINGS = 'wc.settings';
+const LS_MEMORY = 'wc.memory';
+
+const MEMORY_CAP = 100;      // max stored memories
+const MEMORY_INJECT = 30;    // max memories injected into one prompt
 
 const DEFAULT_SETTINGS = {
   baseUrl: 'http://127.0.0.1:8081/v1',
@@ -15,6 +19,7 @@ const DEFAULT_SETTINGS = {
   contextMessages: '20',
   system: '',
   thinking: 'default',
+  autoExtract: false, // fallback learner for models without tool support
 };
 
 const state = {
@@ -25,6 +30,8 @@ const state = {
   settings: { ...DEFAULT_SETTINGS },
   models: [],
   controller: null,
+  memory: [], // [{id, text, createdAt, source: 'manual'|'auto'}]
+  extracting: false,
 };
 
 function uid() {
@@ -64,6 +71,55 @@ function loadSettings() {
 }
 function saveSettings() {
   localStorage.setItem(LS_SETTINGS, JSON.stringify(state.settings));
+}
+
+// ---------- Long-term memory ----------
+function loadMemory() {
+  try {
+    const mem = JSON.parse(localStorage.getItem(LS_MEMORY) || '[]');
+    state.memory = (Array.isArray(mem) ? mem : []).filter(
+      (m) => m && typeof m.text === 'string' && m.text.trim());
+  } catch { state.memory = []; }
+}
+function saveMemory() {
+  try { localStorage.setItem(LS_MEMORY, JSON.stringify(state.memory.slice(0, MEMORY_CAP))); }
+  catch (e) { showWarning('Browser storage is full — free some space to keep memories.'); }
+}
+
+const normText = (t) => t.replace(/\s+/g, ' ').trim().toLowerCase().replace(/^(the|a|an)\s+/, '');
+
+function isDuplicate(a, b) {
+  const x = normText(a);
+  const y = normText(b);
+  if (x === y) return true;
+  const [shorter, longer] = x.length <= y.length ? [x, y] : [y, x];
+  return shorter.length >= 16 && longer.includes(shorter);
+}
+
+function addMemory(text, source = 'manual') {
+  const clean = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (!clean) return false;
+  if (state.memory.some((m) => isDuplicate(m.text, clean))) return false;
+  state.memory.unshift({ id: uid(), text: clean, createdAt: Date.now(), source });
+  state.memory = state.memory.slice(0, MEMORY_CAP);
+  saveMemory();
+  renderMemory();
+  return true;
+}
+
+function deleteMemory(id) {
+  state.memory = state.memory.filter((m) => m.id !== id);
+  saveMemory();
+  renderMemory();
+}
+
+// Facts injected into the system prompt so the model "knows" them.
+function memoryBlock() {
+  const items = state.memory.slice(0, MEMORY_INJECT);
+  if (!items.length) return '';
+  return '## Long-term memory (about the user)\n'
+    + items.map((m) => `- ${m.text}`).join('\n')
+    + '\nUse these facts naturally when relevant. Do not recite this list back.';
 }
 
 function mostRecentChatId() {
@@ -211,8 +267,33 @@ function renderAll() {
 function renderMessage(m) {
   const el = document.createElement('div');
   el.className = `msg ${m.role}`;
-  el.textContent = m.content;
+  const textEl = document.createElement('div');
+  textEl.className = 'msg-text';
+  textEl.textContent = m.content;
+  el.appendChild(textEl);
+  if (m.savedFacts?.length) el.appendChild(savedFactsEl(m));
+  if (m.role === 'user' || m.role === 'assistant') {
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    const btn = document.createElement('button');
+    btn.className = 'msg-action';
+    btn.textContent = '🧠';
+    btn.title = 'Save this message to memory';
+    btn.addEventListener('click', () => {
+      if (addMemory(m.content, 'manual')) showToast('Saved to memory');
+      else showToast('Already in memory');
+    });
+    meta.appendChild(btn);
+    el.appendChild(meta);
+  }
   return el;
+}
+
+function savedFactsEl(m) {
+  const note = document.createElement('div');
+  note.className = 'msg-saved';
+  note.textContent = '🧠 remembered: ' + m.savedFacts.join('  ·  ');
+  return note;
 }
 
 function atBottom() {
@@ -230,14 +311,19 @@ function currentModel() {
 function buildApiMessages(chat) {
   const ctx = Math.max(2, Number(state.settings.contextMessages) || 20);
   const msgs = [];
-  const sys = state.settings.system.trim();
-  if (sys) msgs.push({ role: 'system', content: sys });
+  const sysParts = [];
+  const sys = (state.settings.system || '').trim();
+  if (sys) sysParts.push(sys);
+  const mem = memoryBlock();
+  if (mem) sysParts.push(mem);
+  sysParts.push(MEMORY_TOOL_GUIDANCE);
+  if (sysParts.length) msgs.push({ role: 'system', content: sysParts.join('\n\n') });
   msgs.push(...chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx));
   return msgs;
 }
 
-// Streams a chat completion from the local server, calling onDelta for text chunks.
-async function streamChat(chat, onDelta, signal) {
+// Streams one completion; returns the full text. `opts` overrides request fields.
+async function streamCompletion(apiMessages, onDelta, signal, opts = {}) {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -245,10 +331,11 @@ async function streamChat(chat, onDelta, signal) {
       base: state.settings.baseUrl,
       apiKey: state.settings.apiKey,
       model: currentModel(),
-      temperature: state.settings.temperature,
-      max_tokens: state.settings.maxTokens,
-      thinking: state.settings.thinking,
-      messages: buildApiMessages(chat),
+      temperature: opts.temperature ?? state.settings.temperature,
+      max_tokens: opts.max_tokens ?? state.settings.maxTokens,
+      thinking: opts.thinking ?? state.settings.thinking,
+      messages: apiMessages,
+      tools: opts.tools,
     }),
     signal,
   });
@@ -263,6 +350,7 @@ async function streamChat(chat, onDelta, signal) {
   const decoder = new TextDecoder();
   let buf = '';
   let text = '';
+  const toolCalls = new Map(); // index -> {id, name, args}
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -277,11 +365,21 @@ async function streamChat(chat, onDelta, signal) {
       let obj;
       try { obj = JSON.parse(payload); } catch { continue; }
       if (obj.error) throw new Error(obj.error.message || 'LLM error');
-      const delta = obj.choices?.[0]?.delta?.content;
-      if (delta) { text += delta; onDelta(delta); }
+      const delta = obj.choices?.[0]?.delta;
+      if (!delta) continue;
+      if (delta.content) { text += delta.content; onDelta(delta.content); }
+      // Streamed tool calls arrive as fragments keyed by index.
+      for (const tcd of delta.tool_calls || []) {
+        const i = tcd.index ?? 0;
+        const tc = toolCalls.get(i) || { id: '', name: '', args: '' };
+        if (tcd.id) tc.id = tcd.id;
+        if (tcd.function?.name) tc.name = tcd.function.name;
+        if (tcd.function?.arguments) tc.args += tcd.function.arguments;
+        toolCalls.set(i, tc);
+      }
     }
   }
-  return text;
+  return { text, toolCalls: [...toolCalls.values()].filter((t) => t.name) };
 }
 
 async function fetchModels() {
@@ -304,6 +402,81 @@ function renderModelLabel() {
   modelLabelEl.textContent = currentModel() || 'no model — check Settings';
 }
 
+// ---------- Memory tool (LLM decides what to save) ----------
+const MEMORY_TOOL = {
+  type: 'function',
+  function: {
+    name: 'save_memory',
+    description:
+      'Save one durable fact about the user to long-term memory. Call once per fact, ' +
+      'only for information that will still matter in future conversations ' +
+      '(preferences, personal details, ongoing projects, goals, constraints). ' +
+      'Never save trivia, temporary details, or facts already in the memory list.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fact: { type: 'string', description: 'One concise, self-contained fact (max ~160 chars).' },
+      },
+      required: ['fact'],
+    },
+  },
+};
+
+const MEMORY_TOOL_GUIDANCE =
+  'You can remember things with the save_memory tool. When the user reveals a durable ' +
+  'fact about themselves, call save_memory with one concise fact per call. Decide yourself ' +
+  'what is important — do not ask permission, and do not save trivial or temporary details.';
+const EXTRACT_SYSTEM =
+  'You extract durable facts about the user from chat transcripts. ' +
+  'Respond with ONLY a JSON array of short strings (each at most 160 chars). ' +
+  'Include preferences, personal facts, ongoing projects, goals and constraints. ' +
+  'Skip chit-chat, guesses and anything already present in the KNOWN list. ' +
+  'If there is nothing new, respond with [].';
+
+// Asks the model for new facts learned from a transcript; returns saved count.
+async function extractFacts(transcript) {
+  const known = state.memory.slice(0, 30).map((m) => m.text);
+  const convo = transcript
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-12)
+    .map((m) => `${m.role}: ${m.content.slice(0, 900)}`)
+    .join('\n')
+    .slice(0, 8000);
+  if (!convo) return 0;
+
+  const { text: raw } = await streamCompletion(
+    [
+      { role: 'system', content: EXTRACT_SYSTEM },
+      { role: 'user', content: `KNOWN:\n${known.join('\n') || '(none)'}\n\nTRANSCRIPT:\n${convo}` },
+    ],
+    () => {},
+    null,
+    { max_tokens: 240, temperature: 0, thinking: 'off' },
+  );
+
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start < 0 || end <= start) return 0;
+  let facts;
+  try { facts = JSON.parse(raw.slice(start, end + 1)); } catch { return 0; }
+  if (!Array.isArray(facts)) return 0;
+
+  let added = 0;
+  for (const f of facts) if (typeof f === 'string' && addMemory(f, 'auto')) added++;
+  return added;
+}
+
+// Fire-and-forget extraction after a successful reply.
+async function autoExtract(chat) {
+  if (!state.settings.autoExtract || state.extracting) return;
+  state.extracting = true;
+  try {
+    const n = await extractFacts(chat.messages);
+    if (n) showToast(`Memory: learned ${n} new fact${n > 1 ? 's' : ''}`);
+  } catch { /* extraction failures are silent */ }
+  state.extracting = false;
+}
+
 // ---------- Sending ----------
 async function sendMessage() {
   const text = input.value.trim();
@@ -322,18 +495,26 @@ async function sendMessage() {
   chat.messages.push(asst);
   const el = renderMessage(asst);
   messagesEl.appendChild(el);
+  const textEl = el.querySelector('.msg-text');
   scrollToBottom();
 
+  const onText = (delta) => {
+    asst.content += delta;
+    textEl.textContent = asst.content;
+    if (atBottom()) scrollToBottom();
+  };
+  const onSaved = () => {
+    el.querySelector('.msg-saved')?.remove();
+    if (asst.savedFacts?.length) el.appendChild(savedFactsEl(asst));
+  };
+
   try {
-    await streamChat(chat, (delta) => {
-      asst.content += delta;
-      el.textContent = asst.content;
-      if (atBottom()) scrollToBottom();
-    }, state.controller.signal);
-    if (!asst.content) asst.content = '(empty response)';
+    await runChatTurn(chat, asst, onText, onSaved, state.controller.signal);
+    if (!asst.content && !asst.savedFacts?.length) asst.content = '(empty response)';
+    autoExtract(chat);
   } catch (e) {
     if (e.name === 'AbortError') {
-      if (!asst.content) chat.messages.pop();
+      if (!asst.content && !asst.savedFacts?.length) chat.messages.pop();
     } else {
       chat.messages.pop();
       chat.messages.push({ role: 'error', content: e.message });
@@ -343,6 +524,54 @@ async function sendMessage() {
   touchChat(chat);
   setStreaming(false);
   renderAll();
+}
+
+// One user turn: keep calling the model while it invokes the memory tool,
+// executing tool calls locally and feeding the results back. Max 3 rounds.
+async function runChatTurn(chat, asst, onText, onSaved, signal) {
+  const apiMessages = buildApiMessages(chat);
+  for (let round = 0; round < 3; round++) {
+    const { text, toolCalls } = await streamCompletion(
+      apiMessages, onText, signal, { tools: [MEMORY_TOOL] });
+    if (!toolCalls.length) return;
+
+    const toolResults = [];
+    const saved = [];
+    for (const tc of toolCalls) {
+      let args = {};
+      try { args = JSON.parse(tc.args || '{}'); } catch { /* malformed args -> empty */ }
+      if (tc.name === 'save_memory') {
+        const fact = String(args.fact || '').trim();
+        const added = addMemory(fact, 'tool');
+        if (added && fact) saved.push(fact);
+        toolResults.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: added ? 'Saved.' : fact ? 'Already known.' : 'No fact given.',
+        });
+      } else {
+        toolResults.push({ role: 'tool', tool_call_id: tc.id, content: 'Unknown tool.' });
+      }
+    }
+    if (saved.length) {
+      asst.savedFacts = [...(asst.savedFacts || []), ...saved];
+      onSaved();
+      saveState();
+    }
+
+    apiMessages.push(
+      {
+        role: 'assistant',
+        content: text || null,
+        tool_calls: toolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: { name: tc.name, arguments: tc.args || '{}' },
+        })),
+      },
+      ...toolResults,
+    );
+  }
 }
 
 function setStreaming(on) {
@@ -440,9 +669,87 @@ $('btnTestConn').addEventListener('click', async () => {
   fillModelList();
 });
 
+// ---------- Toast ----------
+let toastTimer = null;
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+// ---------- Memory panel ----------
+const memoryDialog = $('memoryDialog');
+
+function renderMemory() {
+  $('memCount').textContent = state.memory.length ? `(${state.memory.length})` : '';
+  $('memCountTitle').textContent = state.memory.length ? `${state.memory.length} saved` : '';
+  $('memAuto').checked = !!state.settings.autoExtract;
+
+  const list = $('memList');
+  list.innerHTML = '';
+  if (!state.memory.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No memories yet. The model saves important facts about you automatically.';
+    list.appendChild(empty);
+  }
+  const tags = { manual: 'you', auto: 'auto', tool: 'by model' };
+  for (const m of state.memory) {
+    const item = document.createElement('div');
+    item.className = 'mem-item';
+    const text = document.createElement('span');
+    text.className = 'mem-item-text';
+    text.textContent = m.text;
+    const tag = document.createElement('span');
+    tag.className = `mem-tag src-${m.source}`;
+    tag.textContent = tags[m.source] || m.source;
+    const del = document.createElement('button');
+    del.className = 'chat-item-btn chat-item-del';
+    del.textContent = '\u2715';
+    del.title = 'Forget';
+    del.addEventListener('click', () => deleteMemory(m.id));
+    item.append(text, tag, del);
+    list.appendChild(item);
+  }
+}
+
+$('btnMemory').addEventListener('click', () => { renderMemory(); memoryDialog.showModal(); });
+$('btnMemClose').addEventListener('click', () => memoryDialog.close());
+$('btnMemAdd').addEventListener('click', () => {
+  const inp = $('memInput');
+  if (addMemory(inp.value, 'manual')) { inp.value = ''; showToast('Saved to memory'); }
+});
+$('memAuto').addEventListener('change', (e) => {
+  state.settings.autoExtract = e.target.checked;
+  saveSettings();
+});
+$('btnMemExtract').addEventListener('click', async () => {
+  const chat = activeChat();
+  if (!chat) return;
+  const status = $('memStatus');
+  status.hidden = false;
+  status.textContent = 'Extracting…';
+  try {
+    const n = await extractFacts(chat.messages);
+    status.textContent = n ? `Added ${n} new fact${n > 1 ? 's' : ''}.` : 'Nothing new found.';
+  } catch (e) {
+    status.textContent = `Extraction failed: ${e.message}`;
+  }
+});
+$('btnMemClear').addEventListener('click', () => {
+  if (!state.memory.length || !confirm('Forget all saved memories?')) return;
+  state.memory = [];
+  saveMemory();
+  renderMemory();
+});
+
 // ---------- Boot ----------
 loadSettings();
+loadMemory();
 loadState();
+renderMemory();
 renderModelLabel();
 fetchModels();
 if (!state.activeId) newChat({ focus: false }); else renderAll();

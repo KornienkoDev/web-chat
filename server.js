@@ -154,6 +154,10 @@ async function handleApiChat(req, res) {
   if (body.thinking === 'on' || body.thinking === 'off') {
     payloadObj.chat_template_kwargs = { enable_thinking: body.thinking === 'on' };
   }
+  if (Array.isArray(body.tools) && body.tools.length) {
+    payloadObj.tools = body.tools;
+    if (body.tool_choice) payloadObj.tool_choice = body.tool_choice;
+  }
   const payload = Buffer.from(JSON.stringify(payloadObj));
 
   const headers = {
