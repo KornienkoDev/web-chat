@@ -480,11 +480,16 @@ html.dark #btnTheme .ic-sun { display: none; }
   background: var(--accent);
   color: var(--accent-fg);
 }
-.send-btn::before { content: "\f048a"; }             /* md-send */
+/* The paper plane's bounding box centres fine, but its ink mass sits ~2.4px
+   left of that centre (tip reaches right, mass hugs the left), so flex has it
+   feeling lopsided. Measured in the rendered glyph at 18px; 2.5px right puts
+   the optical centre on the button's. */
+.send-btn::before { content: "\f048a"; transform: translateX(2.5px); } /* md-send */
 .send-btn:disabled { opacity: 0.4; cursor: default; }
 /* the send key's stop role while a reply streams */
 .send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
-.send-btn.stop-mode::before { content: "\f04db"; }   /* md-stop */
+/* md-stop's square is symmetric and centres itself — undo the plane's nudge. */
+.send-btn.stop-mode::before { content: "\f04db"; transform: none; }
 
 .btn {
   min-height: 40px; /* comfortable touch targets */
