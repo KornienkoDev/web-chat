@@ -1,3 +1,7 @@
+// mock-llm.js default port — the mock server always runs next to the app,
+// this is the only URL the mock toggle uses (keep in sync with start.sh).
+export const MOCK_BASE_URL = 'http://127.0.0.1:11435/v1';
+
 export const DEFAULT_SETTINGS = {
   baseUrl: 'http://127.0.0.1:8081/v1',
   apiKey: '',
@@ -9,6 +13,7 @@ export const DEFAULT_SETTINGS = {
   thinking: 'default',
   autoExtract: false, // fallback learner for models without tool support
   mcpDisabled: '', // comma-separated MCP server names unchecked in Settings
+  mock: false, // pin all requests to MOCK_BASE_URL; the real baseUrl stays saved
 };
 
 export const state = {

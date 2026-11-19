@@ -86,6 +86,37 @@ check('model discovery', Array.isArray(models) && models.length >= 1, models.joi
 // Tuning for speed/determinism.
 await evalJs(`Object.assign(__wc.state.settings, {thinking:'off', maxTokens:'400'}); __wc.saveSettings();`);
 
+// ---------- Section: Settings mock toggle ----------
+// Mock pins the built-in URL and greys the field out; the saved URL must
+// survive the toggle round-trip. The header must also never advertise a model
+// the active upstream does not serve (a pref from the other side falls back).
+await evalJs(`(async () => { Object.assign(__wc.state.settings, { model: 'not-served' });
+  await __wc.fetchModels(); __wc.saveSettings(); })()`, true);
+check('stale model pref falls back to a served one',
+  await evalJs(`document.getElementById('modelLabel').textContent`) === 'mock-llm');
+await evalJs(`document.getElementById('btnSettings').click()`);
+check('mock toggle greys out the base URL field', await evalJs(`(() => {
+  const box = document.getElementById('setMock');
+  box.checked = true;
+  box.dispatchEvent(new Event('change'));
+  const url = document.getElementById('setBaseUrl');
+  return url.disabled && url.value === 'http://127.0.0.1:11435/v1';
+})()`));
+await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
+check('mock toggle persists and keeps the real URL', await evalJs(
+  `__wc.state.settings.mock === true && __wc.state.settings.baseUrl === ${JSON.stringify(MOCK_BASE)}`));
+await evalJs(`document.getElementById('btnSettings').click()`);
+const mockOff = await evalJs(`(() => {
+  const box = document.getElementById('setMock');
+  box.checked = false;
+  box.dispatchEvent(new Event('change'));
+  const url = document.getElementById('setBaseUrl');
+  return !url.disabled && url.value === ${JSON.stringify(MOCK_BASE)};
+})()`);
+await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
+check('unchecking mock restores the URL field', mockOff);
+await evalJs(`Object.assign(__wc.state.settings, { model: '' }); __wc.saveSettings();`);
+
 // ---------- Section: real LLM round-trip + memory tool ----------
 await evalJs(`__wc.sendMessage('A few things to note: my name is Marcin, I am vegetarian, and my dog Pixel is 3 years old.')`, true);
 const lastMsg = await evalJs(`__wc.activeChat().messages.at(-1)`);

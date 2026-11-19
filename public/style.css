@@ -889,8 +889,12 @@ html.dark #btnTheme .ic-sun { display: none; }
   outline: none;
 }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--ring); }
+.field input:disabled { opacity: 0.5; cursor: not-allowed; }
 .field textarea { font-size: 14px; resize: vertical; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Checkbox row in the settings dialog (mock toggle), styled like .mem-toggle. */
+.field-check { flex-direction: row; align-items: center; }
+.field-check input { width: 17px; height: 17px; accent-color: var(--accent); }
 
 /* MCP servers disclosure in the settings dialog. */
 .mcp-details summary {

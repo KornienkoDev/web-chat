@@ -1,5 +1,5 @@
 // Settings dialog: read/write settings through storage.js.
-import { state } from '../state.js';
+import { state, MOCK_BASE_URL } from '../state.js';
 import { loadSettings, saveSettings } from '../storage.js';
 import { fetchModels, fetchMcpTools } from '../llm.js';
 import { renderModelLabel } from './header.js';
@@ -25,6 +25,15 @@ export function initSettings() {
     if (mcpDetails.open) loadMcpList();
   });
 
+  // Mock swaps the upstream, so re-discover models right away: the header
+  // label and the datalist follow the active server. Closing without saving
+  // resets the settings and the 'close' handler below fetches again.
+  $('setMock').addEventListener('change', () => {
+    applyMockToggle();
+    state.settings.mock = $('setMock').checked;
+    fetchModels().then(fillModelList);
+  });
+
   form.addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'save') return;
     Object.assign(state.settings, readForm());
@@ -38,6 +47,9 @@ export function initSettings() {
   dialog.addEventListener('close', () => {
     loadSettings();
     renderModelLabel();
+    // A toggled-then-cancelled mock may have swapped state.models to the other
+    // upstream's list; rediscover so the label matches the restored settings.
+    fetchModels();
   });
 
   $('btnTestConn').addEventListener('click', async () => {
@@ -56,7 +68,10 @@ function readForm() {
   // the saved value instead of silently re-enabling everything.
   const mcpBoxes = [...$('mcpList').querySelectorAll('input[type=checkbox]')];
   return {
-    baseUrl: $('setBaseUrl').value.trim(),
+    // While mock is on the field displays the mock URL for information only —
+    // parkedUrl holds the real (possibly freshly typed) URL so saving does
+    // not overwrite it and unchecking restores it.
+    baseUrl: $('setMock').checked ? parkedUrl : $('setBaseUrl').value.trim(),
     apiKey: $('setApiKey').value.trim(),
     model: $('setModel').value.trim(),
     temperature: $('setTemp').value.trim(),
@@ -64,15 +79,38 @@ function readForm() {
     contextMessages: $('setContext').value.trim(),
     system: $('setSystem').value,
     thinking: $('setThinking').value,
+    mock: $('setMock').checked,
     mcpDisabled: mcpBoxes.length
       ? mcpBoxes.filter((b) => !b.checked).map((b) => b.value).join(',')
       : state.settings.mcpDisabled,
   };
 }
 
+// Parked base URL while the mock toggle greys the field out.
+let parkedUrl = '';
+
+// Grey out the API URL field and show the well-known mock endpoint in its
+// place; unchecking restores the real URL (unsaved edits included).
+function applyMockToggle() {
+  const url = $('setBaseUrl');
+  if ($('setMock').checked) {
+    // Capture only a field that still holds the real URL; re-entrance (or a
+    // dialog left disabled by a previous session) must not park the mock URL.
+    if (url.value !== MOCK_BASE_URL) parkedUrl = url.value;
+    url.value = MOCK_BASE_URL;
+    url.disabled = true;
+  } else {
+    url.value = parkedUrl;
+    url.disabled = false;
+  }
+}
+
 function fillForm() {
   const s = state.settings;
   $('setBaseUrl').value = s.baseUrl;
+  $('setMock').checked = !!s.mock;
+  parkedUrl = s.baseUrl;
+  applyMockToggle();
   $('setApiKey').value = s.apiKey;
   $('setModel').value = s.model;
   $('setTemp').value = s.temperature;

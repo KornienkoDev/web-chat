@@ -1,16 +1,28 @@
 // Transport layer: everything that talks HTTP to the local server.
 // Pure data in/out — no DOM, no chat/memory knowledge.
-import { state } from './state.js';
+import { state, MOCK_BASE_URL } from './state.js';
 import { emit } from './events.js';
 
 export function currentModel() {
-  return state.settings.model || state.models[0] || '';
+  const pref = state.settings.model;
+  // A saved model name belongs to the upstream it came from: after the mock
+  // toggle swaps the server, a name the new upstream does not serve must not
+  // stick — the header label and the request follow the active server.
+  if (pref && state.models.length && !state.models.includes(pref)) return state.models[0];
+  return pref || state.models[0] || '';
+}
+
+// The Settings mock toggle is the only switch that diverts traffic: while it
+// is on we pin the always-running built-in mock, and the saved baseUrl stays
+// untouched so switching back restores the real endpoint.
+export function effectiveBaseUrl() {
+  return state.settings.mock ? MOCK_BASE_URL : state.settings.baseUrl;
 }
 
 // Discovers served models via the proxy; updates state and notifies listeners.
 export async function fetchModels() {
   try {
-    const res = await fetch(`/api/models?base=${encodeURIComponent(state.settings.baseUrl)}`, {
+    const res = await fetch(`/api/models?base=${encodeURIComponent(effectiveBaseUrl())}`, {
       headers: state.settings.apiKey ? { 'X-Upstream-Key': state.settings.apiKey } : {},
     });
     const data = await res.json();
@@ -64,7 +76,7 @@ export async function streamCompletion(apiMessages, onDelta, signal, opts = {}) 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      base: state.settings.baseUrl,
+      base: effectiveBaseUrl(),
       apiKey: state.settings.apiKey,
       model: currentModel(),
       temperature: opts.temperature ?? state.settings.temperature,
