@@ -58,3 +58,16 @@ export async function sendMessage(text) {
 export function stopStreaming() {
   state.controller?.abort();
 }
+
+// Re-run the last user message: drop it and everything after, then send it again.
+export async function regenerate() {
+  if (state.streaming) return;
+  const chat = activeChat();
+  if (!chat) return;
+  let i = chat.messages.length - 1;
+  while (i >= 0 && chat.messages[i].role !== 'user') i--;
+  if (i < 0) return;
+  const text = chat.messages[i].content;
+  chat.messages.length = i;
+  await sendMessage(text);
+}

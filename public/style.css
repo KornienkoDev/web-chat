@@ -162,6 +162,69 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   margin-top: 4px;
 }
 
+/* Markdown-rendered assistant replies: HTML structure handles whitespace. */
+.msg.md .msg-text { white-space: normal; }
+.msg.md .msg-text > :first-child { margin-top: 0; }
+.msg.md .msg-text > :last-child { margin-bottom: 0; }
+.msg.md p { margin: 0.35em 0; }
+.msg.md h2, .msg.md h3, .msg.md h4, .msg.md h5 { margin: 0.8em 0 0.3em; line-height: 1.3; }
+.msg.md h2 { font-size: 1.2em; }
+.msg.md h3 { font-size: 1.1em; }
+.msg.md h4, .msg.md h5 { font-size: 1em; }
+.msg.md ul, .msg.md ol { margin: 0.35em 0; padding-left: 1.4em; }
+.msg.md li { margin: 0.15em 0; }
+.msg.md a { color: var(--accent); }
+.msg.md blockquote {
+  margin: 0.4em 0;
+  padding: 0.2em 0.8em;
+  border-left: 3px solid var(--border);
+  color: var(--text-dim);
+}
+.msg.md code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.87em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+}
+.msg.md pre {
+  margin: 0.5em 0;
+  padding: 0;
+  background: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.msg.md pre code {
+  display: block;
+  padding: 10px 12px;
+  background: transparent;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.msg.md hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
+
+.code-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.code-copy {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  padding: 2px 8px;
+}
+.code-copy:hover { color: var(--text); }
+
 /* ---------- Composer ---------- */
 .composer {
   flex: none;
@@ -289,6 +352,9 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
 .mem-tag.src-tool { color: #a8c6ff; background: rgba(79, 140, 255, 0.15); }
 
 .btn-danger-ghost { color: var(--danger); border-color: transparent; background: transparent; margin-right: auto; }
+
+.io-row { display: flex; gap: 8px; }
+.io-row .btn { flex: 1; }
 
 /* ---------- Toast ---------- */
 .toast {
