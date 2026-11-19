@@ -6,6 +6,43 @@ import { saveChats } from './storage.js';
 import { streamCompletion } from './llm.js';
 import { addMemory, memoryBlock, MEMORY_TOOL, MEMORY_TOOL_GUIDANCE } from './memory.js';
 
+// Per-message clock for the model: each history message gets its send time and
+// the gap since the previous one, and the system prompt states the current
+// time. Messages saved before timestamps existed stay untagged. Annotation
+// happens on copies so stored chats keep their clean text.
+// Local system clock with explicit UTC offset, e.g. "2026-11-19 13:34:07 UTC+02:00".
+function formatTs(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  const off = -d.getTimezoneOffset();
+  const sign = off < 0 ? '-' : '+';
+  const abs = Math.abs(off);
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
+    + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} `
+    + `UTC${sign}${p(Math.floor(abs / 60))}:${p(abs % 60)}`;
+}
+
+function formatGap(ms) {
+  const min = Math.round(ms / 60000);
+  if (min < 1) return '+moments';
+  if (min < 60) return `+${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 ? `+${h}h ${min % 60}m` : `+${h}h`;
+  const d = Math.floor(h / 24);
+  return `+${d}d ${h % 24}h`;
+}
+
+function stampHistory(msgs) {
+  let prev = null;
+  return msgs.map((m) => {
+    const { ts, ...clean } = m; // upstream APIs may reject unknown fields like ts
+    if (!ts) { prev = null; return clean; }
+    const tag = prev == null ? formatTs(ts) : `${formatTs(ts)} (${formatGap(ts - prev)})`;
+    prev = ts;
+    return { ...clean, content: `[${tag}] ${clean.content}` };
+  });
+}
+
 export function buildApiMessages(chat) {
   const ctx = Math.max(2, Number(state.settings.contextMessages) || 20);
   const msgs = [];
@@ -15,8 +52,13 @@ export function buildApiMessages(chat) {
   const mem = memoryBlock();
   if (mem) sysParts.push(mem);
   sysParts.push(MEMORY_TOOL_GUIDANCE);
+  sysParts.push('The current date and time is ' + formatTs(Date.now()) +
+    '. Chat messages are tagged [sent-at (+gap since the previous message)], so you can ' +
+    'tell how much time passed between turns; take that into account when relevant. ' +
+    'Never repeat these tags back to the user.');
   msgs.push({ role: 'system', content: sysParts.join('\n\n') });
-  msgs.push(...chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx));
+  const recent = chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx);
+  msgs.push(...stampHistory(recent));
   return msgs;
 }
 

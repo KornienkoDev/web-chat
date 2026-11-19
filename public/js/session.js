@@ -20,7 +20,7 @@ export async function sendMessage(text) {
   if (!text || state.streaming) return;
 
   const chat = activeChat() || newChat();
-  chat.messages.push({ role: 'user', content: text });
+  chat.messages.push({ role: 'user', content: text, ts: Date.now() });
   if (chat.title === 'New chat') chat.title = text.slice(0, 40);
   hooks.clearInput();
   hooks.renderAll();
@@ -28,7 +28,7 @@ export async function sendMessage(text) {
   hooks.setStreaming(true);
   state.streaming = true;
   state.controller = new AbortController();
-  const asst = { role: 'assistant', content: '' };
+  const asst = { role: 'assistant', content: '', ts: Date.now() };
   chat.messages.push(asst);
   const { el, textEl } = hooks.appendMessage(asst);
 
@@ -56,7 +56,7 @@ export async function sendMessage(text) {
       if (!asst.content && !asst.savedFacts?.length) chat.messages.pop();
     } else {
       chat.messages.pop();
-      chat.messages.push({ role: 'error', content: e.message });
+      chat.messages.push({ role: 'error', content: e.message, ts: Date.now() });
     }
   }
   if (frame) cancelAnimationFrame(frame); // drop any queued repaint; renderAll is authoritative
