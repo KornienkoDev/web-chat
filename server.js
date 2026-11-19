@@ -68,7 +68,7 @@ const server = http.createServer((req, res) => {
     if (req.method === 'PUT' || req.method === 'POST') return handlePutMemory(req, res);
     return send(res, 405, 'Method not allowed');
   }
-  if (url.pathname === '/api/mcp/tools' && req.method === 'GET') return handleMcpTools(res);
+  if (url.pathname === '/api/mcp/tools' && req.method === 'GET') return handleMcpTools(req, res);
   if (url.pathname === '/api/mcp/call' && req.method === 'POST') return handleMcpCall(req, res);
   if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
   send(res, 405, 'Method not allowed');
@@ -236,9 +236,11 @@ async function handleApiModels(req, res) {
 // The browser asks for the tool list to attach to chat requests and posts
 // tool calls back here; mcp.js owns the server processes. A broken server
 // only removes its own tools (errors map) — the chat keeps working.
-async function handleMcpTools(res) {
+async function handleMcpTools(req, res) {
+  const q = new URL(req.url, 'http://local').searchParams.get('disabled');
+  const disabled = (q || '').split(',').map((s) => s.trim()).filter(Boolean);
   try {
-    sendJson(res, 200, await mcp.listTools());
+    sendJson(res, 200, await mcp.listTools(disabled));
   } catch (e) {
     sendJson(res, 500, { error: `MCP discovery failed: ${e.message}` });
   }

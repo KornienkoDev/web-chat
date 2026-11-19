@@ -26,18 +26,23 @@ export async function fetchModels() {
 
 // MCP bridge: discover the server-managed MCP tools and run one call through
 // the proxy. Discovery failures just mean "no extra tools" — never fatal.
+// Servers unchecked in Settings (settings.mcpDisabled) are skipped without
+// spawning; the per-server status feeds the Settings dialog. Returns status.
 export async function fetchMcpTools() {
+  const disabled = String(state.settings.mcpDisabled || '');
   try {
-    const res = await fetch('/api/mcp/tools');
+    const res = await fetch(`/api/mcp/tools?disabled=${encodeURIComponent(disabled)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     state.mcpTools = Array.isArray(data.tools) ? data.tools : [];
+    state.mcpStatus = Array.isArray(data.servers) ? data.servers : [];
     if (data.errors && Object.keys(data.errors).length) console.warn('MCP server errors:', data.errors);
   } catch (e) {
     state.mcpTools = [];
+    state.mcpStatus = [];
     console.warn('MCP tool discovery failed:', e.message);
   }
-  return state.mcpTools;
+  return state.mcpStatus;
 }
 
 export async function callMcpTool(name, args) {

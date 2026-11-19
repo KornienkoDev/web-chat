@@ -77,6 +77,7 @@ function boot() {
     fetchModels, addMemory, deleteMemory, renderAll, saveSettings, loadSettings,
     loadMemory, exportData, importData,
     input: $('input'),
+    fetchMcpTools,
   };
 }
 

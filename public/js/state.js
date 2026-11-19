@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   system: '',
   thinking: 'default',
   autoExtract: false, // fallback learner for models without tool support
+  mcpDisabled: '', // comma-separated MCP server names unchecked in Settings
 };
 
 export const state = {
@@ -22,6 +23,7 @@ export const state = {
   memoryFile: '', // path of the server-side JSON file, once known
   extracting: false,
   mcpTools: [], // OpenAI function shape from /api/mcp/tools: [{type, function: {...}}]
+  mcpStatus: [], // per-server [{name, status: 'ready'|'error'|'disabled', tools, error?}]
 };
 
 export function uid() {

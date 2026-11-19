@@ -208,6 +208,21 @@ const searchReply = await evalJs(`__wc.activeChat().messages.at(-1).content`);
 check('mcp tool call round-trip', /Mockresult Alpha/i.test(searchReply) && /42/.test(searchReply),
   searchReply.slice(0, 90));
 
+// Disabling via settings: server honors it, the model no longer sees the tool.
+const mcpOff = await evalJs(`(async () => {
+  const d = await (await fetch('/api/mcp/tools?disabled=searchtest')).json();
+  return { tools: d.tools.length, off: d.servers.some(s => s.name === 'searchtest' && s.status === 'disabled') };
+})()`, true);
+check('mcp disable honored by /api/mcp/tools', mcpOff.tools === 0 && mcpOff.off, JSON.stringify(mcpOff));
+await evalJs(`(async () => { __wc.state.settings.mcpDisabled='searchtest'; __wc.saveSettings();
+  await __wc.fetchMcpTools(); })()`, true);
+await evalJs(`__wc.sendMessage('Please search for something random')`, true);
+check('disabled mcp tool not offered to model',
+  /Mock echo/i.test(await evalJs(`__wc.activeChat().messages.at(-1).content`)));
+await evalJs(`(async () => { __wc.state.settings.mcpDisabled=''; __wc.saveSettings();
+  await __wc.fetchMcpTools(); })()`, true);
+check('mcp re-enabled', (await evalJs(`__wc.state.mcpTools.length`)) >= 1);
+
 // ---------- Section: regenerate ----------
 const beforeLen = await evalJs(`__wc.activeChat().messages.length`);
 await evalJs(`document.querySelector('.msg-regen').click(); true`);

@@ -794,6 +794,18 @@ html.dark #btnTheme .ic-sun { display: none; }
 .field textarea { font-size: 14px; resize: vertical; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+/* MCP servers disclosure in the settings dialog. */
+.mcp-details summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-dim);
+}
+.mcp-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.mcp-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+.mcp-row input[type=checkbox] { width: 18px; height: 18px; align-self: center; accent-color: var(--accent); }
+.mcp-name { font-weight: 600; white-space: nowrap; }
+.mcp-info { font-size: 12px; overflow-wrap: anywhere; }
+
 /* ---------- Desktop ---------- */
 @media (min-width: 768px) {
   .sidebar {

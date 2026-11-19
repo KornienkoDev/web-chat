@@ -166,23 +166,39 @@ function ensureReady(srv) {
   return start;
 }
 
-// -> { tools: [{name, description, parameters}], errors: {server: message} }
-async function listTools() {
+// -> { tools, servers, errors }
+// `disabledNames` (from the browser's settings) are reported without spawning,
+// so disabling a server also saves its cold-start cost. `servers` feeds the
+// Settings dialog (one checkbox row per server); `tools` is the ready-to-send
+// OpenAI function-call shape.
+async function listTools(disabledNames = []) {
+  const disabled = new Set(disabledNames.filter((n) => typeof n === 'string' && n));
   const srvs = Object.keys(config()).map(getServer).filter(Boolean);
-  const settled = await Promise.allSettled(srvs.map(ensureReady));
+  const results = await Promise.all(srvs.map(async (s) => {
+    if (disabled.has(s.name)) return { name: s.name, status: 'disabled', tools: [] };
+    try {
+      await ensureReady(s);
+      return {
+        name: s.name,
+        status: 'ready',
+        tools: s.tools.map((t) => ({ name: t.name, description: t.description })),
+      };
+    } catch (e) {
+      return { name: s.name, status: 'error', tools: [], error: e.message || String(e) };
+    }
+  }));
   const tools = [];
   const errors = {};
-  settled.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      // Hand out ready-to-send OpenAI function-call shape.
-      for (const t of r.value.tools) {
-        tools.push({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } });
-      }
-    } else {
-      errors[srvs[i].name] = r.reason?.message || String(r.reason);
+  for (const r of results) {
+    if (r.status !== 'ready') {
+      if (r.status === 'error') errors[r.name] = r.error;
+      continue;
     }
-  });
-  return { tools, errors };
+    for (const t of srvs.find((s) => s.name === r.name).tools) {
+      tools.push({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } });
+    }
+  }
+  return { tools, servers: results, errors };
 }
 
 // Runs one tool by its exposed name; returns the text content.

@@ -128,5 +128,7 @@ base URL** at `http://127.0.0.1:11435/v1`.
   an empty `mcpServers` disables the feature. The shipped `ddg-search` entry
   runs `uvx duckduckgo-mcp-server` (install [uv](https://docs.astral.sh/uv/)
   for it), which gives the model `search`, `fetch_content` and `expand_link`.
+  Settings → **MCP servers** lists every configured server with its tools;
+  uncheck one and save to stop offering its tools (it is not even started).
   Whatever the model searches is visible in the conversation. Treat `mcp.json`
   like `server.js` itself: only define servers you chose to run.
