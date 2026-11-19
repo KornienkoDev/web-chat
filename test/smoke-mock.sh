@@ -4,7 +4,7 @@ set -e
 PORT="${MOCK_PORT:-11435}"
 BASE="http://127.0.0.1:$PORT/v1"
 
-node mock-llm.js &
+PORT="$PORT" node mock-llm.js &
 MOCK_PID=$!
 trap 'kill $MOCK_PID 2>/dev/null' EXIT
 sleep 0.5

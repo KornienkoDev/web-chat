@@ -1,5 +1,18 @@
-// Full CDP test suite for the modular web chat against the live local LLM.
+// Full CDP test suite for the modular web chat. Runs against mock-llm.js ONLY
+// (default http://127.0.0.1:11435/v1): sending test chats to a real model evicts
+// its KV cache and flushes the served conversation, so that is never allowed.
+// The server must also run with WC_MEMORY_FILE pointing to a throwaway file,
+// so the real memories.json is never reset. Use test/run.sh — it starts all of
+// this correctly.
 import { setTimeout as sleep } from 'node:timers/promises';
+
+const MOCK_BASE = process.env.MOCK_BASE ?? 'http://127.0.0.1:11435/v1';
+try {
+  await fetch(`${MOCK_BASE}/models`, { signal: AbortSignal.timeout(2000) });
+} catch {
+  console.error(`mock LLM not reachable at ${MOCK_BASE} — start it with "node mock-llm.js" or use test/run.sh`);
+  process.exit(1);
+}
 
 const version = await (await fetch(`${process.env.CDP_URL ?? 'http://127.0.0.1:9222'}/json/version`)).json();
 const ws = new WebSocket(version.webSocketDebuggerUrl);
@@ -39,6 +52,8 @@ const check = (n, ok, e = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 // Boot clean.
 await reload();
 await evalJs(`localStorage.clear()`);
+// Pin the mock endpoint before any request can reach the default (real) one.
+await evalJs(`Object.assign(__wc.state.settings, { baseUrl: ${JSON.stringify(MOCK_BASE)} }); __wc.saveSettings();`);
 // Also reset the server-side memory file so runs start from a clean slate.
 await evalJs(`fetch('/api/memory', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: '[]' })`, true);
 await reload();
@@ -65,6 +80,7 @@ check('model saved facts by itself', mem.length >= 2 && mem.every((m) => m.sourc
 check('facts cover name/diet/dog', /marcin/.test(joined) && /vegetarian/.test(joined) && /pixel/.test(joined));
 check('savedFacts badge on message', Array.isArray(lastMsg.savedFacts) && lastMsg.savedFacts.length >= 2);
 check('memory persisted', await evalJs(`JSON.parse(localStorage.getItem('wc.memory')||'[]').length >= 2`));
+await sleep(500); // let the debounced memory-file write (250ms) land before reading it back
 const memFile = await evalJs(`(async () => (await fetch('/api/memory')).json())()`, true);
 check('memory written to server file', Array.isArray(memFile.memory) && memFile.memory.length >= 2,
   `${memFile.memory?.length ?? '?'} facts in ${memFile.file || '?'}`);
@@ -114,7 +130,7 @@ const errRole = await evalJs(`__wc.activeChat().messages.at(-1).role`);
 check('connection error surfaced inline', errRole === 'error');
 
 // Manual memory button + duplicate rejection.
-await evalJs(`__wc.state.settings.baseUrl='http://127.0.0.1:8081/v1';`);
+await evalJs(`__wc.state.settings.baseUrl=${JSON.stringify(MOCK_BASE)};`);
 const m0 = await evalJs(`__wc.state.memory.length`);
 await evalJs(`document.querySelector('.msg.user .msg-meta .msg-action:last-child').click()`);
 check('manual save button works', (await evalJs(`__wc.state.memory.length`)) === m0 + 1);
