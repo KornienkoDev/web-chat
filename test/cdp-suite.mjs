@@ -115,6 +115,14 @@ const mockOff = await evalJs(`(() => {
 })()`);
 await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
 check('unchecking mock restores the URL field', mockOff);
+check('save closes the dialog with the shipped defaults',
+  await evalJs(`!document.getElementById('settingsDialog').open`));
+// Cancel must just close: an out-of-range value must not let the browser's
+// constraint validation hold the dialog open.
+await evalJs(`document.getElementById('btnSettings').click()`);
+await evalJs(`document.getElementById('setTemp').value = '9'`);
+await evalJs(`document.querySelector('#settingsForm [value="cancel"]').click()`);
+check('cancel closes over invalid fields', await evalJs(`!document.getElementById('settingsDialog').open`));
 await evalJs(`Object.assign(__wc.state.settings, { model: '' }); __wc.saveSettings();`);
 
 // ---------- Section: settings fits a phone viewport ----------

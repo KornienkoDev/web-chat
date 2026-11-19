@@ -115,7 +115,10 @@
         <textarea id="setSystem" rows="3" placeholder="Optional"></textarea></label>
       <div class="field-row">
         <label class="field"><span>Text attachment limit (chars)</span>
-          <input id="setAttachTextChars" type="number" min="500" max="500000" step="1000" placeholder="16000"
+          <!-- no step attribute: with min=500 a step=1000 grid would only
+               allow 15500/16500-… and mark the shipped default 16000 invalid,
+               which blocked submitting the whole form -->
+          <input id="setAttachTextChars" type="number" min="500" max="500000" placeholder="16000"
             title="Longer documents are cut here and marked as truncated"></label>
         <label class="field"><span>Image max side (px)</span>
           <input id="setAttachImageSide" type="number" min="128" max="4096" placeholder="1280"
@@ -132,7 +135,8 @@
       <p id="settingsMsg" class="muted"></p>
       <div class="dialog-actions">
         <button type="button" id="btnTestConn" class="btn btn-ghost">Test connection</button>
-        <button value="cancel" class="btn btn-ghost">Cancel</button>
+        <!-- formnovalidate: Cancel just closes, even over invalid fields -->
+        <button value="cancel" formnovalidate class="btn btn-ghost">Cancel</button>
         <button value="save" class="btn btn-primary">Save</button>
       </div>
     </form>
