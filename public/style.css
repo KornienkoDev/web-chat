@@ -700,10 +700,11 @@ html.dark #btnTheme .ic-sun { display: none; }
    plane reads as sitting high in the badge. 1px down is the perceptual fix. */
 .send-btn::before { content: "\f048a"; transform: translate(2.5px, 1px); } /* md-send */
 .send-btn:disabled { opacity: 0.4; cursor: default; }
-/* the send key's stop role while a reply streams */
-.send-btn.stop-mode { background: var(--danger); color: var(--danger-fg); }
-/* md-stop's square is symmetric and centres itself — undo the plane's nudge.
-   Its ink is small inside the box, so it gets a size bump to fill the badge. */
+/* The send key's stop role while a reply streams: only the glyph changes, the
+   badge keeps the send key's own accent. Red read as a warning during a normal
+   reply, and the square alone already says "this halts". md-stop's square is
+   symmetric and centres itself, so transform: none undoes the plane's nudge;
+   its ink is small inside the box, hence the size bump to fill the badge. */
 .send-btn.stop-mode::before { content: "\f04db"; transform: none; font-size: 1.2em; }
 
 /* The paperclip mirrors the send key inside the field's left edge — and like

@@ -101,7 +101,8 @@ export function focusInput() {
 
 export function setStreamingUI(on) {
   streaming = on;
-  // The same key sends or halts: one class flips its glyph, colour and label.
+  // The same key sends or halts: one class flips its glyph and label. The badge
+  // keeps its accent on purpose — the square alone marks the stop state.
   btnSend.classList.toggle('stop-mode', on);
   btnSend.setAttribute('aria-label', on ? 'Stop' : 'Send');
 }
