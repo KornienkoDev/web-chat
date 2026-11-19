@@ -129,11 +129,17 @@ export function updateProcess(el, m) {
   const steps = stepsOf(m);
   if (!steps.length) {
     el.querySelector('.msg-process')?.remove();
+    el.classList.remove('msg-live');
     views.delete(el);
     return;
   }
   let view = views.get(el);
   if (!view) {
+    // First real output — retire the prefill "Processing…" stand-in (owned by
+    // ui/messages.js) and mark the bubble live so it can grow to the full
+    // column instead of hugging the "Thinking…" word.
+    el.querySelector('.msg-processing')?.remove();
+    el.classList.add('msg-live');
     const process = document.createElement('div');
     process.className = 'msg-process';
     const textEl = el.querySelector('.msg-text');

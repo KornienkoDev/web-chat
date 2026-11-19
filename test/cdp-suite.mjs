@@ -218,12 +218,21 @@ check('deletions persist', (await evalJs(`__wc.state.chats.size`)) <= 2);
 
 // ---------- Section: stop + error handling ----------
 await evalJs(`__wc.state.settings.maxTokens='2000';`);
-await evalJs(`__wc.sendMessage('Count from 1 to 500, one number per line.'); true`);
+// appendMessageEl runs synchronously inside sendMessage, so a same-task probe
+// lands after the prefill stand-in was planted but before any SSE token can
+// clear it. The mock's stream then fills the bubble, and the stop below proves
+// the stand-in is gone once the bubble is re-rendered from state.
+const prefill = await evalJs(`(() => {
+  __wc.sendMessage('Count from 1 to 500, one number per line.');
+  return !!document.querySelector('#messages .msg:last-child .msg-processing');
+})()`);
+check('prefill shows the Processing stand-in', prefill === true);
 await sleep(4000);
 await evalJs(`__wc.stopStreaming()`);
 await sleep(500);
 const stopped = await evalJs(`({streaming: __wc.state.streaming, role: __wc.activeChat().messages.at(-1).role, len: (__wc.activeChat().messages.at(-1).content||'').length})`);
 check('stop halts generation, keeps partial text', stopped.streaming === false && stopped.role === 'assistant' && stopped.len > 0, JSON.stringify(stopped));
+check('stand-in gone from finished bubbles', await evalJs(`!document.querySelector('#messages .msg-processing')`));
 
 await evalJs(`__wc.state.settings.baseUrl='http://127.0.0.1:9/x';`);
 await evalJs(`__wc.sendMessage('hi')`, true);

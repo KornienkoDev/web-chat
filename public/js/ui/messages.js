@@ -302,6 +302,16 @@ function savedFactsEl(m) {
 // replies start as Markdown so the streaming body upgrades in place.
 export function appendMessageEl(m) {
   const el = renderMessage(m, { md: m.role === 'assistant' });
+  // While the upstream is still prefilling, the reply bubble would be an empty
+  // box — plant a shimmering stand-in word. The first real output clears it:
+  // text via renderLiveText, a thinking/tool step via timeline's updateProcess.
+  // Never part of renderMessage, so a finished chat can never resurrect it.
+  if (m.role === 'assistant') {
+    const wait = document.createElement('div');
+    wait.className = 'msg-processing';
+    wait.textContent = 'Processing\u2026';
+    el.insertBefore(wait, el.querySelector('.msg-text'));
+  }
   messagesEl.appendChild(el);
   scrollToBottom();
   return { el, textEl: el.querySelector('.msg-text') };
@@ -310,6 +320,7 @@ export function appendMessageEl(m) {
 // Re-render a still-streaming reply's Markdown. Called on a throttle, so partial
 // syntax (bold, lists, fences) upgrades to final markup as tokens arrive.
 export function renderLiveText(textEl, text) {
+  if (text.trim()) textEl.parentElement?.querySelector('.msg-processing')?.remove();
   textEl.innerHTML = mdToHtml(text);
 }
 

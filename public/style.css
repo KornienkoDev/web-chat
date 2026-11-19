@@ -760,6 +760,33 @@ html.dark #btnTheme .ic-sun { display: none; }
   flex-direction: column;
   gap: 6px;
 }
+/* While a reply streams its thinking/tool steps the bubble grows to the full
+   column: otherwise it shrinks to the width of the "Thinking…" word and jitters
+   with every step. Only the live bubble carries the class — the end-of-stream
+   renderAll rebuild drops it, so finished answers keep their snug fit-content. */
+.msg.assistant.msg-live { width: 100%; }
+/* Prefill stand-in: the bubble's first visible word while the upstream has
+   produced nothing yet. Same sweeping band as the live "Thinking…" label, at
+   body size so it reads as the reply beginning. */
+.msg-processing {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text) 50%, var(--text-dim) 100%);
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: think-shimmer 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-processing {
+    animation: none;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    color: var(--text-dim);
+  }
+}
 .msg-process .msg-think { margin: 0; }
 .msg-process .msg-tool { align-self: flex-start; }
 .msg-tool {
