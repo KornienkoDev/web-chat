@@ -241,6 +241,10 @@ function attachmentsEl(m) {
       const img = document.createElement('img');
       img.className = 'attach-img';
       img.src = a.dataUrl;
+      // Dimension attributes hand the engine the aspect ratio directly: the
+      // picture then keeps its shape in every browser and reserves its space
+      // before the data URL paints. Older records may lack w/h — skip then.
+      if (a.w && a.h) { img.width = a.w; img.height = a.h; }
       img.alt = a.name;
       img.title = a.name;
       img.loading = 'lazy';

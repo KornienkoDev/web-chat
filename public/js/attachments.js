@@ -94,7 +94,7 @@ async function readImage(file) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
       const out = canvas.toDataURL('image/jpeg', 0.85);
-      return imageRecord(file, out);
+      return imageRecord(file, out, canvas.width, canvas.height);
     }
     const dataUrl = await new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -102,16 +102,19 @@ async function readImage(file) {
       r.onerror = () => reject(new Error('could not read the image'));
       r.readAsDataURL(file);
     });
-    return imageRecord(file, dataUrl);
+    return imageRecord(file, dataUrl, w, h);
   } finally {
     bmp.close?.();
   }
 }
 
-function imageRecord(file, dataUrl) {
+function imageRecord(file, dataUrl, w, h) {
   if (!/^data:image\/[a-z+]+;base64,/i.test(dataUrl)) throw new Error('unexpected image data');
   if (dataUrl.length > IMAGE_DATA_MAX) throw new Error('image still too large after resizing');
-  return { id: uid(), name: label(file), mime: file.type, kind: 'image', dataUrl };
+  // Storing the stored-pixel size lets the bubble's <img> carry width/height
+  // attributes, so every engine keeps the aspect ratio before and while the
+  // picture decodes (pure CSS caps distorted it in some browsers).
+  return { id: uid(), name: label(file), mime: file.type, kind: 'image', dataUrl, w, h };
 }
 
 function decodeImage(file) {

@@ -287,11 +287,27 @@ textarea, input, select { font: inherit; font-size: 16px; color: var(--text); }
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 6px;
+  align-items: flex-start; /* never stretch the image cross-axis: some engines
+                              distort an img flex item instead of keeping ratio */
+  /* The width cap belongs HERE, in plain px, not as min(280px, 100%) on the
+     img: a percentage inside the img's max-width blows up the bubble's
+     fit-content sizing and leaves ~110px of dead space beside the picture. */
+  max-width: 280px;
 }
+/* Two or more images: let the strip grow into a horizontal row of up to three,
+   wrapping on narrow screens. A lone image keeps the bubble hugging it. */
+.msg-attach:has(.attach-img ~ .attach-img) { max-width: 852px; } /* 3 x 280 + 2 x 6 */
 .msg.user .msg-attach { justify-content: flex-end; }
 .attach-img {
   display: block;
-  max-width: min(280px, 100%);
+  /* shrinkable but never grown: images sit side by side when they fit and
+     shrink (ratio intact) instead of overflowing on a narrow screen */
+  flex: 0 1 auto;
+  /* Author auto beats the width/height presentation attributes, so they only
+     serve as the aspect-ratio hint and never as a literal box size. */
+  width: auto;
+  height: auto;
+  max-width: 280px;
   max-height: 220px;
   object-fit: contain;
   border: 1px solid var(--border);
