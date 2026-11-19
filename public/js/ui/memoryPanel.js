@@ -102,6 +102,10 @@ function renderMemory() {
     date.className = 'muted mem-date';
     date.textContent = new Date(m.createdAt).toLocaleDateString();
     date.title = `Learned ${new Date(m.createdAt).toLocaleString()}`;
+    // Right-hand column: learned date above the source tag.
+    const meta = document.createElement('span');
+    meta.className = 'mem-meta';
+    meta.append(date, tag);
     const del = document.createElement('button');
     del.className = 'chat-item-btn chat-item-del ic ic-close';
     del.title = 'Forget';
@@ -114,7 +118,7 @@ function renderMemory() {
       });
       if (ok) deleteMemory(m.id); // by id: this row is re-rendered while asking
     });
-    item.append(text, date, tag, del);
+    item.append(text, meta, del);
     list.appendChild(item);
   }
 }
