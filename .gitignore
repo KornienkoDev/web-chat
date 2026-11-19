@@ -1,1 +1,3 @@
 node_modules/
+memories.json
+memories.json.*.tmp

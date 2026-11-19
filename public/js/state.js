@@ -19,6 +19,7 @@ export const state = {
   models: [],
   controller: null,
   memory: [], // [{id, text, createdAt, source: 'manual'|'auto'|'tool'}]
+  memoryFile: '', // path of the server-side JSON file, once known
   extracting: false,
 };
 

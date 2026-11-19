@@ -20,6 +20,17 @@ export function exportData() {
   URL.revokeObjectURL(a.href);
 }
 
+// Saves just the memory list as a plain JSON file, in the same shape as the
+// server's memories.json, for when the server's file endpoint is unreachable.
+export function downloadMemories() {
+  const blob = new Blob([JSON.stringify(state.memory, null, 2) + '\n'], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'memories.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export async function importData(file) {
   let data;
   try {

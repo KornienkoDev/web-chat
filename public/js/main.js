@@ -53,17 +53,22 @@ function boot() {
   });
 
   loadSettings();
-  loadMemory();
-  loadChats();
-  if (!state.activeId) state.activeId = mostRecentChatId();
-  if (!state.activeId) newChat(); else renderAll();
-  renderMemCount();
+
+  // Memory lives in a file on the server; await it so the first render and the
+  // first prompt already see the saved facts.
+  loadMemory().finally(() => {
+    loadChats();
+    if (!state.activeId) state.activeId = mostRecentChatId();
+    if (!state.activeId) newChat(); else renderAll();
+    renderMemCount();
+  });
+
   fetchModels();
 
   window.__wc = {
     state, $, activeChat, newChat, openChat, sendMessage, stopStreaming, regenerate,
     fetchModels, addMemory, deleteMemory, renderAll, saveSettings, loadSettings,
-    exportData, importData,
+    loadMemory, exportData, importData,
     input: $('input'),
   };
 }

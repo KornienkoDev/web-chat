@@ -6,9 +6,20 @@ const http = require('node:http');
 const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
+
+// Memories are stored in a plain JSON file outside browser storage so they
+// survive clearing site data and can be inspected, edited or backed up by hand.
+// Override the location with WC_MEMORY_FILE.
+const MEMORY_FILE = process.env.WC_MEMORY_FILE
+  ? path.resolve(process.env.WC_MEMORY_FILE)
+  : path.join(__dirname, 'memories.json');
+const MEMORY_MAX_BYTES = 1024 * 1024; // 1 MiB is plenty for a few hundred facts
+const MEMORY_MAX_ITEMS = 500;
+const MEMORY_SOURCES = new Set(['manual', 'auto', 'tool']);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -49,6 +60,11 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://local');
   if (req.method === 'POST' && url.pathname === '/api/chat') return handleApiChat(req, res);
   if (req.method === 'GET' && url.pathname === '/api/models') return handleApiModels(req, res);
+  if (url.pathname === '/api/memory') {
+    if (req.method === 'GET') return handleGetMemory(req, res);
+    if (req.method === 'PUT' || req.method === 'POST') return handlePutMemory(req, res);
+    return send(res, 405, 'Method not allowed');
+  }
   if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
   send(res, 405, 'Method not allowed');
 });
@@ -208,6 +224,62 @@ async function handleApiModels(req, res) {
       up.headers['content-type'] || 'application/json'));
   } catch (e) {
     upstreamError(res, target.href, e);
+  }
+}
+
+// ---------- Memory file ----------
+// Accepts either a bare array or { memory: [...] } and returns a clean list,
+// or null when the shape is wrong. Each fact keeps its id, text and source so
+// the browser can match it back to its own copy.
+function normalizeMemories(value) {
+  const list = Array.isArray(value) ? value : value && Array.isArray(value.memory) ? value.memory : null;
+  if (!list) return null;
+  const out = [];
+  for (const m of list.slice(0, MEMORY_MAX_ITEMS)) {
+    if (!m || typeof m.text !== 'string') continue;
+    const text = m.text.replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (!text) continue;
+    out.push({
+      id: typeof m.id === 'string' && m.id ? m.id.slice(0, 64) : randomUUID(),
+      text,
+      createdAt: Number.isFinite(m.createdAt) ? m.createdAt : Date.now(),
+      source: MEMORY_SOURCES.has(m.source) ? m.source : 'manual',
+    });
+  }
+  return out;
+}
+
+async function handleGetMemory(req, res) {
+  try {
+    const raw = await fs.promises.readFile(MEMORY_FILE, 'utf8');
+    let data;
+    try { data = JSON.parse(raw); } catch { throw new Error('memory file is not valid JSON'); }
+    sendJson(res, 200, { memory: normalizeMemories(data) || [], file: MEMORY_FILE });
+  } catch (e) {
+    if (e.code === 'ENOENT') return sendJson(res, 200, { memory: [], file: MEMORY_FILE });
+    sendJson(res, 500, { error: `Cannot read memory file: ${e.message}` });
+  }
+}
+
+async function handlePutMemory(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req, MEMORY_MAX_BYTES);
+  } catch {
+    return sendJson(res, 400, { error: 'Invalid or oversized JSON body.' });
+  }
+  const memory = normalizeMemories(body);
+  if (!memory) return sendJson(res, 400, { error: 'memory[] is required.' });
+  try {
+    await fs.promises.mkdir(path.dirname(MEMORY_FILE), { recursive: true });
+    // Write to a temp file in the same directory, then rename so readers never
+    // see a half-written file.
+    const tmp = `${MEMORY_FILE}.${randomUUID()}.tmp`;
+    await fs.promises.writeFile(tmp, JSON.stringify(memory, null, 2) + '\n', 'utf8');
+    await fs.promises.rename(tmp, MEMORY_FILE);
+    sendJson(res, 200, { ok: true, count: memory.length, file: MEMORY_FILE });
+  } catch (e) {
+    sendJson(res, 500, { error: `Cannot write memory file: ${e.message}` });
   }
 }
 

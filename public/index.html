@@ -99,8 +99,10 @@
         <span>Fallback: also learn facts from every reply (for models without tool support)</span></label>
       <button id="btnMemExtract" class="btn btn-ghost btn-block">Extract from current chat</button>
       <p id="memStatus" class="muted" hidden></p>
+      <p id="memFile" class="muted" hidden></p>
       <div id="memList" class="mem-list" aria-live="polite"></div>
       <div class="dialog-actions">
+        <button id="btnMemSave" class="btn btn-ghost" title="Write all memories to the persistent JSON file now">Save to file</button>
         <button id="btnMemClear" class="btn btn-ghost btn-danger-ghost">Clear all</button>
         <button id="btnMemClose" class="btn">Close</button>
       </div>

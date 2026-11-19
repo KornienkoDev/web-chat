@@ -1,9 +1,10 @@
-// Memory panel dialog: browse, add, forget, extract-from-chat.
+// Memory panel dialog: browse, add, forget, extract-from-chat, save-to-file.
 import { state } from '../state.js';
-import { saveSettings } from '../storage.js';
+import { saveSettings, saveMemoryNow } from '../storage.js';
+import { downloadMemories } from '../io.js';
 import { activeChat } from '../chats.js';
 import { addMemory, deleteMemory, clearMemory, extractFacts } from '../memory.js';
-import { on } from '../events.js';
+import { on, emit } from '../events.js';
 import { $ } from './dom.js';
 
 export function initMemoryPanel() {
@@ -35,6 +36,30 @@ export function initMemoryPanel() {
   $('btnMemClear').addEventListener('click', () => {
     if (state.memory.length && confirm('Forget all saved memories?')) clearMemory();
   });
+  $('btnMemSave').addEventListener('click', async () => {
+    const btn = $('btnMemSave');
+    const status = $('memStatus');
+    btn.disabled = true;
+    status.hidden = false;
+    status.textContent = 'Saving…';
+    try {
+      const { saved, error, count, file } = await saveMemoryNow();
+      const label = `${count} ${count === 1 ? 'memory' : 'memories'}`;
+      if (saved) {
+        status.textContent = file ? `Saved ${label} to ${file}.` : `Saved ${label}.`;
+        emit('toast', `Saved ${label} to file`);
+      } else {
+        // Server file not writable (server not running?): land the browser
+        // copy on disk as a real file via download instead of losing it.
+        downloadMemories();
+        const target = state.memoryFile || 'memories.json';
+        status.textContent = `Server file not available (${error || 'unknown error'}) — downloaded ${label} as memories.json instead. To restore: replace ${target} with that file and reload the app.`;
+      }
+    } finally {
+      btn.disabled = false;
+      renderMemory();
+    }
+  });
 
   on('memory:changed', renderMemory);
 }
@@ -42,6 +67,9 @@ export function initMemoryPanel() {
 function renderMemory() {
   $('memCountTitle').textContent = state.memory.length ? `${state.memory.length} saved` : '';
   $('memAuto').checked = !!state.settings.autoExtract;
+  const fileEl = $('memFile');
+  fileEl.hidden = !state.memoryFile;
+  fileEl.textContent = state.memoryFile ? `Saved to ${state.memoryFile}` : '';
 
   const list = $('memList');
   list.innerHTML = '';
