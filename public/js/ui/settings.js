@@ -77,6 +77,7 @@ function readForm() {
     temperature: $('setTemp').value.trim(),
     maxTokens: $('setMaxTokens').value.trim(),
     contextMessages: $('setContext').value.trim(),
+    maxToolRounds: $('setMaxToolRounds').value.trim(),
     system: $('setSystem').value,
     thinking: $('setThinking').value,
     promptCache: $('setPromptCache').checked,
@@ -120,6 +121,7 @@ function fillForm() {
   $('setTemp').value = s.temperature;
   $('setMaxTokens').value = s.maxTokens;
   $('setContext').value = s.contextMessages;
+  $('setMaxToolRounds').value = s.maxToolRounds;
   $('setSystem').value = s.system;
   $('setThinking').value = s.thinking;
   $('setPromptCache').checked = s.promptCache !== false;

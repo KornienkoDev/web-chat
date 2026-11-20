@@ -9,6 +9,9 @@ export const DEFAULT_SETTINGS = {
   temperature: '',
   maxTokens: '1024',
   contextMessages: '20',
+  // Model calls per turn that may still invoke tools; when the budget runs
+  // out turn.js forces a tool-less conclusion (clamped there, 1..50).
+  maxToolRounds: '20',
   system: '',
   thinking: 'default',
   // Attachment caps, clamped in attachments.js at read time (empty or out of

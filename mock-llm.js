@@ -24,8 +24,10 @@
 //     as cached_tokens in a final usage chunk (when stream_options.include_usage
 //     is set) — "tokens" are words, only the ratios matter for the tests;
 //   * upstream failure modes: "empty probe" answers with an immediate stop
-//     right after a tool result (the client must nudge once to recover), and
-//     "die mid stream" drops the socket without finish_reason or [DONE]
+//     right after a tool result (the client must nudge once to recover),
+//     "search N times for X" keeps calling the search tool for N rounds past
+//     the client's tool-round cap (the turn must still end with a conclusion),
+//     and "die mid stream" drops the socket without finish_reason or [DONE]
 //     (the proxy and client must surface an error instead of going silent);
 //   * GET /mock/last returns the latest request's cache metadata (cache key,
 //     stream_options, roles, clock-at-end) for the suite to assert against.
@@ -265,6 +267,22 @@ const server = http.createServer(async (req, res) => {
     // calls it — the result then comes back as a tool message for branch 2.
     const searchTool = (body.tools || []).find((t) => t.function?.name?.endsWith('__search'));
     let sm;
+    // 0a) Deep-research emulation: "search N times for X" keeps calling the
+    // search tool once per round for N rounds — the way a real model chains
+    // search -> read -> search — even past the client's tool-round cap. With
+    // the cap reached (or no tools offered, the client's tool-less wrap-up
+    // call) it delivers the conclusion instead.
+    if ((sm = lastUser.match(/search (\d+) times (?:for|about) (.+)/i))) {
+      const need = Number(sm[1]);
+      const done = msgs.filter((m) => m.role === 'tool').length;
+      if (searchTool && done < need) {
+        return streamOneToolCall(res, id, searchTool.function.name,
+          { query: `${sm[2].trim()} (round ${done + 1})` }, usage);
+      }
+      return streamText(res, id,
+        `Research done after ${done} searches on ${sm[2].trim()}: the answer is 42.`,
+        undefined, '', usage);
+    }
     if (searchTool && !afterTool && (sm = lastUser.match(/search for (.+)/i))) {
       return streamOneToolCall(res, id, searchTool.function.name, { query: sm[1].trim() }, usage);
     }

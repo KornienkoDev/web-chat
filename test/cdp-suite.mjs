@@ -118,6 +118,16 @@ await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
 check('unchecking mock restores the URL field', mockOff);
 check('save closes the dialog with the shipped defaults',
   await evalJs(`!document.getElementById('settingsDialog').open`));
+// Tool-round budget control: shipped at 20 in the form, persisted on save.
+await evalJs(`document.getElementById('btnSettings').click()`);
+check('max tool rounds defaults to 20 in the form',
+  await evalJs(`document.getElementById('setMaxToolRounds').value`) === '20');
+await evalJs(`document.getElementById('setMaxToolRounds').value = '7'`);
+await evalJs(`document.querySelector('#settingsForm [value="save"]').click()`);
+check('max tool rounds setting round-trips', await evalJs(
+  `__wc.state.settings.maxToolRounds === '7'`
+  + ` && JSON.parse(localStorage.getItem('wc.settings')).maxToolRounds === '7'`));
+await evalJs(`Object.assign(__wc.state.settings, { maxToolRounds: '20' }); __wc.saveSettings();`);
 // Cancel must just close: an out-of-range value must not let the browser's
 // constraint validation hold the dialog open.
 await evalJs(`document.getElementById('btnSettings').click()`);
@@ -517,6 +527,23 @@ const died = await evalJs(`__wc.activeChat().messages.at(-1)`);
 check('mid-stream cut ends as an inline error',
   died.role === 'error' && /unexpectedly|network|failed|stream/i.test(String(died.content)),
   JSON.stringify(died).slice(0, 160));
+// A research chain that keeps calling the search tool past the tool-round
+// budget used to end the turn on the last tool pill with no answer at all.
+// The client must finish with a tool-less wrap-up call that forces a
+// conclusion. The budget itself comes from Settings (maxToolRounds, default
+// 20) — shrunk to 3 here so the chain hits it without twenty mock searches.
+await evalJs(`__wc.newChat()`);
+await evalJs(`Object.assign(__wc.state.settings, { maxToolRounds: '3' }); __wc.saveSettings();`);
+await evalJs(`__wc.sendMessage('Please search 8 times for quantum batteries')`, true);
+const deep = await evalJs(`__wc.activeChat().messages.at(-1)`);
+check('search chain past the round budget still ends with a conclusion',
+  deep?.role === 'assistant' && /Research done after 3 searches on quantum batteries/i.test(String(deep.content)),
+  JSON.stringify(deep).slice(0, 160));
+const deepTools = (deep?.timeline || []).filter((s) => s.kind === 'tool' && s.family === 'mcp');
+check('chain searches execute up to the configured budget',
+  deepTools.length === 3 && deepTools.every((t) => /quantum batteries/.test(t.arg || '')),
+  String(deepTools.length));
+await evalJs(`Object.assign(__wc.state.settings, { maxToolRounds: '20' }); __wc.saveSettings();`);
 
 // ---------- Section: attachments (text documents + images) ----------
 await evalJs(`__wc.newChat()`);

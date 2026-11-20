@@ -74,6 +74,12 @@ const MCP_TOOL_GUIDANCE =
   'fully sure about — call the tool first, then answer from its result. Do not claim you ' +
   'cannot browse the web.';
 
+// Default cap on model calls per turn that may still invoke tools; Settings
+// exposes it as maxToolRounds. When the model keeps searching past the
+// budget, the turn must not simply stop: the loop breaks and one tool-less
+// wrap-up call forces the conclusion (runChatTurn).
+const DEFAULT_TOOL_ROUNDS = 20;
+
 // A short one-line preview of a tool call's arguments for the usage badge: the
 // first meaningful argument (a search query or URL usually), flattened and
 // capped so one long prompt can't stretch the badge across the screen.
@@ -139,7 +145,11 @@ function cacheKeyFor(chat) {
 
 // One user turn: keep calling the model while it invokes tools (save_memory,
 // forget_memory or any MCP tool), executing them locally and feeding the
-// results back. Max 6 rounds so a search -> read -> answer chain fits.
+// results back. Tool-using model calls are capped per turn by the
+// `maxToolRounds` setting (default 20) so a search -> read -> answer chain
+// fits; if the model still wants tools when the budget runs out, the turn
+// ends with a forced, tool-less conclusion call instead of stopping on a tool
+// pill (see runChatTurn).
 //
 // Everything the model does this turn — its thinking and every tool call — is
 // recorded on `asst.timeline` as one ordered list of steps ({kind:'think'|
@@ -170,33 +180,49 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
   // lives only in the transient apiMessages, so it never reaches the saved
   // chat or the next turn's prompt.
   let nudged = false;
+  const nudge = () => apiMessages.push({
+    role: 'user',
+    content: '(no answer received - please answer now, using the tool results shown above.)',
+  });
 
-  for (let round = 0; round < 6; round++) {
-    const { text, toolCalls, usage } = await streamCompletion(
-      apiMessages, onText, signal, { tools, onReasoning, cacheKey: cacheKeyFor(chat) });
-    // Prompt-cache report for the badge: across tool rounds the total is the
-    // work done and `cached` the part the server reused; a server that does
-    // not report the hit keeps `cached` null (badge then shows tokens only).
-    if (usage) {
+  // Tool-round budget from Settings (empty/invalid falls back to 20; the
+  // 1..50 clamp mirrors the Settings input's min/max so a hand-edited
+  // localStorage value cannot stall a tab on an endless search chain).
+  const maxRounds = Math.max(1, Math.min(50, Number(state.settings.maxToolRounds) || DEFAULT_TOOL_ROUNDS));
+
+  // One model request plus the prompt-cache bookkeeping for the badge: across
+  // tool rounds the total is the work done and `cached` the part the server
+  // reused; a server that does not report the hit keeps `cached` null (badge
+  // then shows tokens only). Pass `tools` for a tool round, omit them for the
+  // tool-less conclusion call.
+  const ask = async (roundTools) => {
+    const r = await streamCompletion(
+      apiMessages, onText, signal, { tools: roundTools, onReasoning, cacheKey: cacheKeyFor(chat) });
+    if (r.usage) {
       const prev = asst.usage || { prompt: 0, cached: null };
       asst.usage = {
-        prompt: prev.prompt + usage.prompt,
-        cached: usage.cached == null && prev.cached == null
+        prompt: prev.prompt + r.usage.prompt,
+        cached: r.usage.cached == null && prev.cached == null
           ? null
-          : (prev.cached || 0) + (usage.cached || 0),
+          : (prev.cached || 0) + (r.usage.cached || 0),
       };
     }
+    return r;
+  };
+
+  for (let round = 0; round < maxRounds; round++) {
+    const { text, toolCalls } = await ask(tools);
     if (!toolCalls.length) {
-      // Empty reply on a round that followed tool results -> nudge once.
-      if (!text && round > 0 && !nudged) {
+      // A real answer (or a model that never used tools) ends the turn.
+      if (text || round === 0) return;
+      // Empty on a round that followed tool results -> nudge once; a second
+      // such quit falls through to the forced conclusion below.
+      if (!nudged) {
         nudged = true;
-        apiMessages.push({
-          role: 'user',
-          content: '(no answer received - please answer now, using the tool results shown above.)',
-        });
+        nudge();
         continue;
       }
-      return;
+      break;
     }
 
     const toolResults = [];
@@ -263,5 +289,23 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
       },
       ...toolResults,
     );
+  }
+
+  // Forced conclusion. Reaching here means the turn used tools and then either
+  // ran out of rounds mid-chain (the classic "turn stops during a ddg-search
+  // chain": the last round asked for another search and nothing ever answered
+  // it) or quit empty twice after tool results. One last request with the
+  // tools taken away leaves the model no move but to summarize what the
+  // results already in the context say — a turn that used tools must end on
+  // an answer, never on a tool pill.
+  apiMessages.push({
+    role: 'system',
+    content: 'The tool budget for this turn is used up. Do not call any more '
+      + 'tools - answer the user now, using the tool results shown above.',
+  });
+  if (!(await ask()).text && !nudged) {
+    nudged = true;
+    nudge();
+    await ask();
   }
 }

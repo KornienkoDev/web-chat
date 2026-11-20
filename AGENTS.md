@@ -122,4 +122,10 @@ Conventional-ish, lowercase, imperative, short: `feat: …`, `fix: …`, `style:
   once (a transient user message in `apiMessages`, never saved to the chat)
   when the model replies with nothing after a tool result. Keep all three —
   removing any one reopens the "turn silently stops after a search" bug.
+- Tool-round budget: `turn.js` caps the tool-using model calls in one turn at
+  the `maxToolRounds` setting (Settings dialog; default 20, clamped 1..50).
+  If the model wants to keep going (long ddg-search chains), the loop does
+  NOT just end — it finishes with one forced request with the tools omitted,
+  so the turn concludes from the results already in context instead of
+  stopping on the last tool pill with an empty reply.
 - Mobile-first: inputs stay at 16 px (iOS zoom), touch targets ≥ 40 px, respect safe areas.
