@@ -13,7 +13,9 @@
 //   * after tool results, it confirms and, on later turns, echoes the memory
 //     facts that were injected into the system prompt (proves recall wiring);
 //   * "list of ... fruits"/"code block" returns real Markdown (list + fenced
-//     code) so the renderer's copy button path is covered;
+//     code + pipe table with alignments and an escaped \| cell + strike/em +
+//     bare URL + merged blockquote + image syntax) so the renderer's copy
+//     button, table and inline-markup paths are all covered;
 //   * "count from A to B" streams A..B one per line so the Stop button has a
 //     long enough stream to actually interrupt;
 //   * multimodal user messages (attachment parts) are flattened back to text,
@@ -221,6 +223,11 @@ function extractFacts(text) {
 const MARKDOWN_REPLY =
   'Here is a list of fruits and a small Python program:\n\n'
   + '- Apple\n- Banana\n- Cherry\n\n'
+  + '| Fruit | Color | Qty |\n| --- | :---: | ---: |\n'
+  + 'Apple | Red | 3\n| Banana \\| baby | Yellow | 12 |\n\n'
+  + '~~Mango~~ is _out_; details at https://example.com/fruits.\n\n'
+  + '> Note: seasonal.\n> Pick firm fruit.\n\n'
+  + '![bananas](https://example.com/bananas.png)\n\n'
   + '```python\nprint("hi")\n```\n';
 
 const server = http.createServer(async (req, res) => {

@@ -302,9 +302,28 @@ check('duplicate rejected', !(await evalJs(`__wc.addMemory('The user\\'s name is
 await evalJs(`__wc.sendMessage('Reply with a markdown list of 3 fruits and a python code block that prints hi. No preamble.')`, true);
 const md = await evalJs(`(() => {
   const el = [...document.querySelectorAll('.msg.assistant')].pop();
-  return { li: el.querySelectorAll('ul li').length, pre: !!el.querySelector('pre code'), copy: !!el.querySelector('.code-copy') };
+  return {
+    li: el.querySelectorAll('ul li').length, pre: !!el.querySelector('pre code'),
+    copy: !!el.querySelector('.code-copy'),
+    th: el.querySelectorAll('table thead th').length,
+    td: el.querySelectorAll('table tbody td').length,
+    esc: [...el.querySelectorAll('table tbody td')].some((c) => c.textContent.includes('Banana | baby')),
+    align: [...el.querySelectorAll('table thead th')].map((h) => h.style.textAlign).join(','),
+    del: !!el.querySelector('del'), em: !!el.querySelector('em'),
+    bare: !!el.querySelector('.msg-text a[href="https://example.com/fruits"]'),
+    imgLink: [...el.querySelectorAll('.msg-text a')].some((a) => a.textContent === 'bananas'),
+    bang: el.querySelector('.msg-text').textContent.includes('!['),
+    quote: el.querySelectorAll('.msg-text blockquote').length,
+    quoteBr: !!el.querySelector('.msg-text blockquote br'),
+  };
 })()`);
 check('markdown: list + code block + copy button', md.li >= 3 && md.pre && md.copy, JSON.stringify(md));
+check('markdown: table with alignment + escaped pipe',
+  md.th === 3 && md.td === 6 && md.esc && md.align === ',center,right', JSON.stringify(md));
+check('markdown: del/em/bare link/image demotion',
+  md.del && md.em && md.bare && md.imgLink && !md.bang, JSON.stringify(md));
+check('markdown: consecutive quote lines share one blockquote',
+  md.quote === 1 && md.quoteBr, JSON.stringify(md));
 
 // ---------- Section: MCP tools (via test/mock-mcp-server.js) ----------
 // Boot discovery is async and a server may still be starting; poll a bit.
