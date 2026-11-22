@@ -246,7 +246,12 @@ const server = http.createServer(async (req, res) => {
     catch { res.writeHead(400); return res.end('{"error":"bad json"}'); }
 
     const msgs = body.messages || [];
-    const lastUser = flattenContent([...msgs].reverse().find((m) => m.role === 'user')?.content);
+    // The trailing clock line and the forced-conclusion budget line are user
+    // messages too (Qwen3's template rejects system messages after the first),
+    // so skip them when finding the user's actual ask.
+    const meta = (m) => m.role === 'user'
+      && /current date and time|tool budget for this turn is used up/i.test(flattenContent(m.content));
+    const lastUser = flattenContent([...msgs].reverse().find((m) => m.role === 'user' && !meta(m))?.content);
     const afterTool = msgs.some((m) => m.role === 'tool');
     const id = `chatcmpl-mock-${++reqId}`;
 
@@ -259,7 +264,7 @@ const server = http.createServer(async (req, res) => {
       cacheKey: (typeof body.cache_key === 'string' && body.cache_key) || null,
       streamOptions: body.stream_options || null,
       roles: msgs.map((msg) => msg.role),
-      clockAtEnd: msgs.at(-1)?.role === 'system'
+      clockAtEnd: msgs.at(-1)?.role === 'user'
         && /current date and time/i.test(flattenContent(msgs.at(-1)?.content)),
     });
 

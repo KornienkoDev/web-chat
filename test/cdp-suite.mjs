@@ -491,7 +491,7 @@ const c1 = await mockLast();
 check('request carries a cache key and asks for usage',
   !!c1?.cacheKey && c1.streamOptions?.include_usage === true, JSON.stringify(c1));
 check('volatile clock rides at the end of the prompt (stable prefix)',
-  c1?.roles?.at(-1) === 'system' && c1.clockAtEnd === true, JSON.stringify(c1?.roles || []));
+  c1?.roles?.at(-1) === 'user' && c1.clockAtEnd === true, JSON.stringify(c1?.roles || []));
 const c1Msg = await evalJs(`__wc.activeChat().messages.at(-1)`);
 check('first turn of a chat reports a cache miss',
   c1Msg.usage?.prompt > 0 && c1Msg.usage?.cached === 0, JSON.stringify(c1Msg.usage));

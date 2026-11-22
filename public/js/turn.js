@@ -123,12 +123,16 @@ export function buildApiMessages(chat) {
   msgs.push({ role: 'system', content: sysParts.join('\n\n') });
   const recent = chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-ctx);
   msgs.push(...stampHistory(recent));
-  // The clock rides in a trailing system message, NOT inside the leading one:
-  // prompt caches only reuse KV state up to the first changed token, so a
-  // time string in the system prompt would invalidate everything behind it —
-  // the whole conversation — on every single turn. Kept at the end, only this
-  // one line re-prefills; everything before it stays byte-stable across turns.
-  msgs.push({ role: 'system', content: 'The current date and time is ' + formatTs(Date.now()) + '.' });
+  // The clock rides in a trailing user message, NOT inside the leading system
+  // prompt: prompt caches only reuse KV state up to the first changed token,
+  // so a time string in the system prompt would invalidate everything behind
+  // it — the whole conversation — on every single turn. Kept at the end, only
+  // this one line re-prefills; everything before it stays byte-stable across
+  // turns. It is a user, not a system, message on purpose: Qwen3's chat
+  // template raises "System message must be at the beginning" for any system
+  // message after the first, and user is the only trailing role every chat
+  // template accepts.
+  msgs.push({ role: 'user', content: 'The current date and time is ' + formatTs(Date.now()) + '.' });
   return msgs;
 }
 
@@ -298,8 +302,10 @@ export async function runChatTurn(chat, asst, onText, onSaved, onTimeline, signa
   // tools taken away leaves the model no move but to summarize what the
   // results already in the context say — a turn that used tools must end on
   // an answer, never on a tool pill.
+  // A user, not a system, message: Qwen3's chat template raises on any
+  // system message after the first (see the trailing clock above).
   apiMessages.push({
-    role: 'system',
+    role: 'user',
     content: 'The tool budget for this turn is used up. Do not call any more '
       + 'tools - answer the user now, using the tool results shown above.',
   });

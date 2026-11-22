@@ -110,9 +110,12 @@ Conventional-ish, lowercase, imperative, short: `feat: …`, `fix: …`, `style:
   `turn.js`, forwarded by the `/api/chat` proxy) so llama.cpp-style servers
   pin a chat to a KV-cache slot. Everything before the newest message must
   stay token-stable across turns — notably the volatile "current date and
-  time" line rides in a **trailing** system message (`buildApiMessages`);
+  time" line rides in a **trailing** user message (`buildApiMessages`);
   moving it back into the leading system prompt silently invalidates the
-  cache for the whole conversation every turn. `msg.usage`
+  cache for the whole conversation every turn. It is a user, not a system,
+  message on purpose: Qwen3's chat template raises "System message must be at
+  the beginning" for any system message after the first, and user is the only
+  trailing role every chat template accepts. `msg.usage`
   (`{prompt, cached}` tokens, badge in `ui/messages.js`) is display-only and
   stripped in `stampHistory()` like the timeline.
 - Stream integrity: `llm.js` throws when an SSE stream ends without a
